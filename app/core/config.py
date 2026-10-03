@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
+    # RAG retrieval stays local; external provider is used only to write answers.
+    RAG_EMBEDDING_PROVIDER: str = "local"
+    RAG_LOCAL_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    RAG_LOCAL_EMBEDDING_DIM: int = 768
+    RAG_CHUNK_SIZE: int = 900
+    RAG_CHUNK_OVERLAP: int = 120
+    RAG_VECTOR_CANDIDATES: int = 20
+
     # S3 & Cloudflare R2 Compatible Object Storage
     STORAGE_BACKEND: str = "local"  # "local", "s3", or "r2"
     S3_ENDPOINT_URL: Optional[str] = None  # e.g. https://<account_id>.r2.cloudflarestorage.com

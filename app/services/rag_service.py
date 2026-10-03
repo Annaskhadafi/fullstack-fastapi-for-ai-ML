@@ -1,4 +1,6 @@
 import os
+import asyncio
+import re
 from io import BytesIO
 import time
 import logging
@@ -19,6 +21,7 @@ from app.schemas.rag import RetrievedChunk, RAGQueryResponse
 logger = logging.getLogger(__name__)
 
 _openai_client: Optional[AsyncOpenAI] = None
+_local_embedding_model: Any = None
 
 LOCAL_DOCS_DIR = os.path.join("data", "documents")
 LOCAL_DOCS_FILE = os.path.join(LOCAL_DOCS_DIR, "documents_registry.json")
@@ -129,7 +132,21 @@ async def get_embedding(text: str) -> List[float]:
     if not clean_text:
         return [0.0] * 768
 
-    # 1. OpenAI SDK Client (Compatible with OpenAI, Cloudflare AI, Groq, Ollama)
+    if settings.RAG_EMBEDDING_PROVIDER.lower() == "local":
+        try:
+            global _local_embedding_model
+            if _local_embedding_model is None:
+                from sentence_transformers import SentenceTransformer
+                _local_embedding_model = SentenceTransformer(settings.RAG_LOCAL_EMBEDDING_MODEL)
+            values = await asyncio.to_thread(_local_embedding_model.encode, clean_text, normalize_embeddings=True)
+            values = np.asarray(values, dtype=float).reshape(-1).tolist()
+            dim = settings.RAG_LOCAL_EMBEDDING_DIM
+            return (values[:dim] + [0.0] * dim)[:dim]
+        except Exception as e:
+            logger.warning("Local embedding model unavailable; using deterministic fallback: %s", e)
+            return generate_local_embedding(clean_text, dim=settings.RAG_LOCAL_EMBEDDING_DIM)
+
+    # Optional remote embedding mode for legacy deployments.
     openai_client = get_openai_client()
     if openai_client:
         try:
@@ -175,18 +192,24 @@ async def get_embedding(text: str) -> List[float]:
     return generate_local_embedding(clean_text, dim=768)
 
 
-def chunk_text(text: str, chunk_size: int = 600, overlap: int = 100) -> List[str]:
-    """Splits long text into overlapping chunks."""
+def chunk_text(text: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None) -> List[str]:
+    """Split on paragraphs/sentences, then apply bounded overlap."""
+    chunk_size = chunk_size or settings.RAG_CHUNK_SIZE
+    overlap = overlap if overlap is not None else settings.RAG_CHUNK_OVERLAP
     if len(text) <= chunk_size:
-        return [text]
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        start += chunk_size - overlap
+        return [text.strip()]
+    units = [unit.strip() for unit in re.split(r"(?<=[.!?])\s+|\n\s*\n", text) if unit.strip()]
+    chunks: List[str] = []
+    current = ""
+    for unit in units:
+        if current and len(current) + len(unit) + 1 > chunk_size:
+            chunks.append(current.strip())
+            tail = current[-overlap:].strip()
+            current = f"{tail} {unit}" if tail else unit
+        else:
+            current = f"{current} {unit}".strip()
+    if current:
+        chunks.append(current.strip())
     return chunks
 
 
@@ -316,6 +339,7 @@ async def search_similar_documents(
     or in-memory numpy cosine similarity fallback across DB and local document store.
     """
     query_vec = await get_embedding(query_text)
+    candidate_limit = max(top_k, settings.RAG_VECTOR_CANDIDATES)
     chunks_map: Dict[str, RetrievedChunk] = {}
 
     # 1. Try DB search if available
@@ -325,7 +349,7 @@ async def search_similar_documents(
                 stmt = select(
                     Document,
                     Document.embedding.cosine_distance(query_vec).label("distance")
-                ).order_by(Document.embedding.cosine_distance(query_vec)).limit(top_k)
+                ).order_by(Document.embedding.cosine_distance(query_vec)).limit(candidate_limit)
 
                 result = await db.execute(stmt)
                 for doc, distance in result.all():
@@ -378,8 +402,32 @@ async def search_similar_documents(
                     similarity_score=round(max(0.0, sim), 3)
                 )
 
-    # Sort all retrieved chunks by similarity score descending
     all_chunks = list(chunks_map.values())
+
+    # Local BM25 reranking improves exact term and identifier matching after vector retrieval.
+    query_terms = re.findall(r"[\w-]{2,}", query_text.lower())
+    if all_chunks and query_terms:
+        tokenized = [re.findall(r"[\w-]{2,}", item.content.lower()) for item in all_chunks]
+        avg_len = sum(len(tokens) for tokens in tokenized) / max(len(tokenized), 1)
+        doc_freq = {term: sum(term in set(tokens) for tokens in tokenized) for term in set(query_terms)}
+        bm25_scores = []
+        for tokens in tokenized:
+            frequencies = {term: tokens.count(term) for term in set(query_terms)}
+            score = 0.0
+            for term, frequency in frequencies.items():
+                if not frequency:
+                    continue
+                idf = np.log(1 + (len(tokenized) - doc_freq[term] + 0.5) / (doc_freq[term] + 0.5))
+                score += idf * (frequency * 2.0 / (frequency + 1.5 * (0.75 + 0.25 * len(tokens) / max(avg_len, 1))))
+            bm25_scores.append(float(score))
+        max_bm25 = max(bm25_scores, default=0.0) or 1.0
+        reranked = []
+        for item, bm25 in zip(all_chunks, bm25_scores):
+            vector_score = float(item.similarity_score)
+            item.similarity_score = round(0.65 * vector_score + 0.35 * (bm25 / max_bm25), 3)
+            reranked.append(item)
+        all_chunks = reranked
+
     all_chunks.sort(key=lambda x: x.similarity_score, reverse=True)
     return all_chunks[:top_k]
 

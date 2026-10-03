@@ -31,6 +31,7 @@ scikit-image>=0.22.0
 # Machine Learning & Tabular Inference
 scikit-learn>=1.5.0
 joblib>=1.4.2
+sentence-transformers>=3.0.0
 
 # Security & Authentication
 bcrypt>=4.2.0
