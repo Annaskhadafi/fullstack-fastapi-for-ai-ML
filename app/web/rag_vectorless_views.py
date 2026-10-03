@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.services.auth_service import get_current_user_optional
 from app.services.rag_service import extract_pdf_text
-from app.services.rag_vectorless_service import add_document, answer, delete_document, inspect_pdf, list_documents, provider_settings, update_provider
+from app.services.rag_vectorless_service import add_document, answer, delete_document, delete_documents, inspect_pdf, list_documents, provider_settings, update_provider
 from app.web.templates import render_template
 
 router = APIRouter(prefix="/rag/vectorless", tags=["Web RAG Vectorless"])
@@ -53,6 +53,15 @@ async def vectorless_delete(document_id: str, user=Depends(get_current_user_opti
     if not delete_document(document_id):
         return JSONResponse({"ok": False, "error": "Dokumen tidak ditemukan."}, status_code=404)
     return {"ok": True, "documents": list_documents()}
+
+
+@router.delete("/documents")
+async def vectorless_delete_many(document_ids: list[str] = Body(...), user=Depends(get_current_user_optional)):
+    if not user:
+        return JSONResponse({"ok": False, "error": "Login diperlukan untuk menghapus dokumen."}, status_code=401)
+    if not document_ids or len(document_ids) > 500:
+        return JSONResponse({"ok": False, "error": "Pilih minimal satu dokumen."}, status_code=400)
+    return {"ok": True, "deleted": delete_documents(document_ids), "documents": list_documents()}
 
 
 @router.post("/query")

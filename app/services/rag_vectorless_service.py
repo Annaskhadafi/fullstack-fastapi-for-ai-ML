@@ -95,6 +95,16 @@ def delete_document(document_id: str) -> bool:
     return True
 
 
+def delete_documents(document_ids: List[str]) -> int:
+    wanted = set(document_ids)
+    items = _load()
+    kept = [item for item in items if item.get("id") not in wanted]
+    deleted = len(items) - len(kept)
+    if deleted:
+        _save(kept)
+    return deleted
+
+
 def search(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     terms = set(re.findall(r"[\w-]{2,}", query.lower()))
     ranked = []
