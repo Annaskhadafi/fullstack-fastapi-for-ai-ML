@@ -2,6 +2,7 @@ import json
 import os
 import re
 import uuid
+from io import BytesIO
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -69,6 +70,16 @@ def add_document(title: str, content: str, user_id: str | None = None) -> int:
     items.extend(entries)
     _save(items)
     return len(entries)
+
+
+def inspect_pdf(file_bytes: bytes) -> Dict[str, Any]:
+    from pypdf import PdfReader
+    reader = PdfReader(BytesIO(file_bytes))
+    pages = []
+    for number, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        pages.append({"page": number, "characters": len(text), "text": text})
+    return {"filename": "", "pages": len(pages), "characters": sum(page["characters"] for page in pages), "content": "\n\n".join(page["text"] for page in pages if page["text"]), "page_data": pages}
 
 
 def list_documents(limit: int = 100) -> List[Dict[str, Any]]:
