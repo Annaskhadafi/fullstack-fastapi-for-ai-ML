@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.services.auth_service import get_current_user_optional
 from app.services.rag_service import extract_pdf_text
-from app.services.rag_vectorless_service import add_document, answer, list_documents
+from app.services.rag_vectorless_service import add_document, answer, list_documents, provider_settings, update_provider
 from app.web.templates import render_template
 
 router = APIRouter(prefix="/rag/vectorless", tags=["Web RAG Vectorless"])
@@ -11,7 +11,16 @@ router = APIRouter(prefix="/rag/vectorless", tags=["Web RAG Vectorless"])
 
 @router.get("", response_class=HTMLResponse)
 async def vectorless_page(request: Request, user=Depends(get_current_user_optional)):
-    return render_template(request, "rag/vectorless/index.html", {"user": user, "docs": list_documents()})
+    return render_template(request, "rag/vectorless/index.html", {"user": user, "docs": list_documents(), "provider": provider_settings()})
+
+
+@router.post("/settings")
+async def vectorless_settings(api_key: str = Form(""), model: str = Form(""), base_url: str = Form(""), user=Depends(get_current_user_optional)):
+    if not user:
+        return JSONResponse({"ok": False, "error": "Login diperlukan untuk mengubah provider AI."}, status_code=401)
+    if not model.strip():
+        return JSONResponse({"ok": False, "error": "Model AI wajib diisi."}, status_code=400)
+    return {"ok": True, "provider": update_provider(api_key, model, base_url)}
 
 
 @router.post("/documents")

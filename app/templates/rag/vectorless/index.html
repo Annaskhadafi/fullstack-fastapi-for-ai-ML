@@ -6,6 +6,16 @@
         <div><p class="text-xs font-bold uppercase tracking-[.18em] text-emerald-600">RAG V2</p><h1 class="text-2xl font-bold text-slate-900 mt-1">RAG Vectorless</h1><p class="text-sm text-slate-500 mt-2">Pencarian dokumen cepat tanpa embedding, API vector, atau pgvector.</p></div>
         <a href="/rag" class="btn btn-outline btn-sm">Buka RAG pgvector</a>
     </div>
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm mb-6">
+        <div class="flex items-center justify-between mb-3"><div><h2 class="font-bold text-slate-900">Pengaturan AI</h2><p class="text-xs text-slate-500 mt-1">Mendukung OpenAI dan provider OpenAI-compatible seperti Groq, DeepSeek, Ollama, atau gateway internal.</p></div><span id="provider-status" class="badge {% if provider.configured %}badge-success{% else %}badge-ghost{% endif %}">{% if provider.configured %}Terhubung{% else %}Belum diatur{% endif %}</span></div>
+        <form id="provider-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <input type="password" name="api_key" placeholder="API key (server-side)" class="input input-bordered input-sm" autocomplete="off" />
+            <input name="model" value="{{ provider.model }}" placeholder="Model, contoh: gpt-4o-mini" required class="input input-bordered input-sm" />
+            <input name="base_url" value="{{ provider.base_url }}" placeholder="https://api.openai.com/v1" class="input input-bordered input-sm" />
+            <button class="btn btn-primary btn-sm">Simpan Provider</button>
+        </form>
+        <p id="provider-message" class="text-xs text-slate-500 mt-2">API key tidak pernah ditampilkan kembali. Kosongkan key untuk kembali memakai OPENAI_API_KEY dari environment.</p>
+    </section>
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <section class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h2 class="font-bold text-slate-900 mb-3">Indeks teks lokal</h2>
@@ -29,5 +39,6 @@
 {% block scripts %}<script>
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 document.getElementById('vectorless-upload').addEventListener('submit', async event => { event.preventDefault(); const res = await fetch('/rag/vectorless/documents', {method:'POST', body:new FormData(event.target)}); const body = await res.json(); document.getElementById('upload-status').textContent = body.ok ? `${body.chunks} potongan masuk indeks.` : body.error; if(body.ok) location.reload(); });
+document.getElementById('provider-form').addEventListener('submit', async event => { event.preventDefault(); const res = await fetch('/rag/vectorless/settings', {method:'POST', body:new FormData(event.target)}); const body = await res.json(); document.getElementById('provider-message').textContent = body.ok ? `Provider aktif: ${body.provider.model} · ${body.provider.base_url}` : body.error; if(body.ok) document.getElementById('provider-status').textContent = 'Terhubung'; });
 document.getElementById('query-form').addEventListener('submit', async event => { event.preventDefault(); const answerBox = document.getElementById('answers'); answerBox.innerHTML = '<p class="text-sm text-slate-500">Mencari di indeks teks...</p>'; const res = await fetch('/rag/vectorless/query', {method:'POST', body:new FormData(event.target)}); const body = await res.json(); if(!body.ok) { answerBox.textContent = body.error; return; } answerBox.innerHTML = `<div class="rounded-xl bg-white border border-slate-200 p-4"><p class="text-xs text-slate-500 mb-2">${esc(body.model)}</p><div class="text-sm whitespace-pre-wrap leading-relaxed">${esc(body.answer)}</div></div><div class="text-xs text-slate-500">${body.matches.length} sumber ditemukan.</div>`; });
 </script>{% endblock %}

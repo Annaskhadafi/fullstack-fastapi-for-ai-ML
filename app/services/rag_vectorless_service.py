@@ -7,8 +7,32 @@ from typing import Any, Dict, List
 
 from app.core.config import settings
 from app.services.rag_service import get_openai_client
+from openai import AsyncOpenAI
 
 STORE = os.path.join("data", "documents", "vectorless_registry.json")
+_provider = {"api_key": None, "model": None, "base_url": None}
+
+
+def provider_settings() -> Dict[str, Any]:
+    return {
+        "configured": bool(_provider["api_key"] or settings.OPENAI_API_KEY),
+        "model": _provider["model"] or settings.OPENAI_MODEL,
+        "base_url": _provider["base_url"] or settings.OPENAI_BASE_URL or "https://api.openai.com/v1",
+    }
+
+
+def update_provider(api_key: str, model: str, base_url: str) -> Dict[str, Any]:
+    _provider.update({"api_key": api_key.strip() or None, "model": model.strip() or None, "base_url": base_url.strip().rstrip("/") or None})
+    return provider_settings()
+
+
+def _client():
+    if _provider["api_key"]:
+        kwargs = {"api_key": _provider["api_key"]}
+        if _provider["base_url"]:
+            kwargs["base_url"] = _provider["base_url"]
+        return AsyncOpenAI(**kwargs)
+    return get_openai_client()
 
 
 def _load() -> List[Dict[str, Any]]:
@@ -68,17 +92,17 @@ async def answer(query: str, top_k: int = 5) -> Dict[str, Any]:
     context = "\n\n".join(f"[{item['title']}]\n{item['content']}" for item in matches)
     text = ""
     model = "Lexical Context (Vectorless)"
-    client = get_openai_client()
+    client = _client()
     if client and context:
         try:
             response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=provider_settings()["model"],
                 messages=[{"role": "system", "content": "Jawab hanya dari konteks dokumen. Jika tidak ada jawabannya, katakan tidak ditemukan."},
                           {"role": "user", "content": f"Konteks:\n{context}\n\nPertanyaan: {query}"}],
                 temperature=0.2,
             )
             text = response.choices[0].message.content or ""
-            model = f"{model} + {settings.OPENAI_MODEL}"
+            model = f"{model} + {provider_settings()['model']}"
         except Exception:
             text = ""
     if not text:
