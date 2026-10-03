@@ -1,4 +1,4 @@
-# 🚀 Afi Template - Python AI Monolith Boilerplate
+# 🚀 Python AI Monolith Boilerplate
 
 Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi **Computer Vision (OpenCV + YOLO)**, **RAG (PostgreSQL Neon DB + pgvector)**, dan **Machine Learning (Scikit-Learn/ONNX)** dengan antarmuka interaktif **Jinja2 + HTMX + Tailwind CSS**.
 
