@@ -17,6 +17,7 @@ from app.web.auth_views import router as web_auth_router
 from app.web.dashboard_views import router as web_dashboard_router
 from app.web.cv_views import router as web_cv_router
 from app.web.rag_views import router as web_rag_router
+from app.web.rag_vectorless_views import router as web_rag_vectorless_router
 from app.web.ml_views import router as web_ml_router
 from app.web.models_views import router as web_models_router
 from app.web.face_views import router as web_face_router
@@ -97,6 +98,7 @@ app.include_router(web_auth_router)
 app.include_router(web_dashboard_router)
 app.include_router(web_cv_router)
 app.include_router(web_rag_router)
+app.include_router(web_rag_vectorless_router)
 app.include_router(web_ml_router)
 app.include_router(web_models_router)
 app.include_router(web_face_router)

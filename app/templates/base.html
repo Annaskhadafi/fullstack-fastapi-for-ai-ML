@@ -114,6 +114,13 @@
                 <i data-lucide="database" class="w-5 h-5 text-slate-500 flex-shrink-0"></i>
                 <span x-show="!sidebarCollapsed" class="truncate">pgvector RAG</span>
             </a>
+            <a href="/rag/vectorless"
+               :class="sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+               class="flex items-center py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70 transition"
+               title="RAG Vectorless">
+                <i data-lucide="search" class="w-5 h-5 text-emerald-600 flex-shrink-0"></i>
+                <span x-show="!sidebarCollapsed" class="truncate">RAG Vectorless</span>
+            </a>
 
             <!-- Machine Learning -->
             <a href="/ml" 
@@ -220,6 +227,9 @@
             </a>
             <a href="/rag" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-700">
                 <i data-lucide="database" class="w-4 h-4"></i> pgvector RAG
+            </a>
+            <a href="/rag/vectorless" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-700">
+                <i data-lucide="search" class="w-4 h-4 text-emerald-600"></i> RAG Vectorless
             </a>
             <a href="/ml" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-700">
                 <i data-lucide="brain-circuit" class="w-4 h-4"></i> Machine Learning
