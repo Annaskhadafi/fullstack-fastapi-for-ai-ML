@@ -98,6 +98,17 @@ def _normalize(values: np.ndarray) -> np.ndarray:
     return (values - values.mean()) / (values.std() + 1e-10)
 
 
+def _resolve_symbol(mt5, requested: str) -> str:
+    requested = requested.strip().upper()
+    if mt5.symbol_info(requested) is not None:
+        return requested
+    symbols = mt5.symbols_get() or []
+    matches = [item.name for item in symbols if item.name.upper().startswith(requested)]
+    if matches:
+        return sorted(matches, key=lambda name: (not name.upper().endswith("M"), len(name)))[0]
+    raise ValueError(f"Market {requested} tidak ditemukan di MT5")
+
+
 def get_forecast(symbol: str, timeframe: str, bars: int = 10000) -> Dict[str, Any]:
     with _terminal_lock:
         return _get_forecast(symbol, timeframe, bars)
@@ -112,8 +123,9 @@ def _get_forecast(symbol: str, timeframe: str, bars: int = 10000) -> Dict[str, A
     if not mt5.initialize():
         raise RuntimeError("MetaTrader 5 tidak terhubung")
     try:
+        symbol = _resolve_symbol(mt5, symbol)
         if not mt5.symbol_select(symbol, True):
-            raise ValueError(f"Market {symbol} tidak ditemukan di MT5")
+            raise ValueError(f"Market {symbol} tidak bisa diaktifkan di MT5")
         rates = mt5.copy_rates_from_pos(symbol, getattr(mt5, TIMEFRAMES[timeframe]), 1, max(bars, 400))
         if rates is None or len(rates) < 400:
             raise RuntimeError("Data candle MT5 belum cukup")
