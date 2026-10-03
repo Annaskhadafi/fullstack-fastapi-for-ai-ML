@@ -17,6 +17,7 @@ TIMEFRAMES = {
     "M30": "TIMEFRAME_M30", "H1": "TIMEFRAME_H1", "H4": "TIMEFRAME_H4",
     "D1": "TIMEFRAME_D1",
 }
+TIMEFRAME_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
 _cache = {}
 os.makedirs("data/forecast", exist_ok=True)
 # ponytail: serialize terminal access; use a separate MT5 bridge for multiple hosts.
@@ -57,6 +58,7 @@ def _record_and_evaluate(symbol, timeframe, rates, forecast):
         item = {"key": f"{symbol}:{timeframe}:{anchor}", "symbol": symbol, "timeframe": timeframe,
                 "anchor_timestamp": anchor, "anchor_price": forecast["current_price"],
                 "predicted_price": forecast["projected_price"], "projection": forecast["projection"],
+                "target_timestamp": anchor + TIMEFRAME_SECONDS[timeframe] * 30,
                 "created_at": forecast["updated_at"], "status": "pending"}
         conn.execute("INSERT OR IGNORE INTO forecasts VALUES (?,?,?,?)", (symbol, timeframe, anchor, json.dumps(item)))
 
@@ -65,6 +67,8 @@ def get_history(symbol: Optional[str] = None, timeframe: Optional[str] = None):
     with _connect() as conn:
         rows = conn.execute("SELECT payload FROM forecasts WHERE (? IS NULL OR symbol=?) AND (? IS NULL OR timeframe=?) ORDER BY anchor DESC", (symbol, symbol, timeframe, timeframe)).fetchall()
     items = [json.loads(row["payload"]) for row in rows]
+    for item in items:
+        item.setdefault("target_timestamp", item["anchor_timestamp"] + TIMEFRAME_SECONDS.get(item["timeframe"], 60) * 30)
     completed = [x for x in items if x["status"] == "completed"]
     return {"items": items[:50], "completed": len(completed), "total": len(items),
             "direction_accuracy": round(sum(x["direction_correct"] for x in completed)/len(completed)*100, 2) if completed else None,
