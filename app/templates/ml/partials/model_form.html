@@ -12,6 +12,8 @@
         {% endif %}
     </div>
 
+    {% if active_model.features %}
+    <p class="text-xs text-slate-500">{{ active_model.features|length }} field input model. Isi nilai yang ingin diprediksi.</p>
     <!-- Dynamic Form for Features -->
     <form hx-post="/ml/predict-htmx"
           hx-target="#ml-result-container"
@@ -29,7 +31,7 @@
                 <input type="number"
                        step="any"
                        name="{{ feat.name }}"
-                       value="{{ feat.default }}"
+                       value="{{ feat.default if feat.default is not none else '' }}"
                        {% if feat.min_value is not none %}min="{{ feat.min_value }}"{% endif %}
                        {% if feat.max_value is not none %}max="{{ feat.max_value }}"{% endif %}
                        required
@@ -42,6 +44,9 @@
             <i data-lucide="play" class="w-4 h-4"></i> Jalankan Prediksi
         </button>
     </form>
+    {% else %}
+    <p class="text-sm text-amber-700">Field input belum dapat dibaca dari model. Tambahkan schema fitur di Model Hub agar form prediksi bisa dibuat.</p>
+    {% endif %}
 </div>
 {% else %}
 <p class="text-xs text-slate-500 py-4 text-center">Tidak ada model yang aktif.</p>

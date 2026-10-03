@@ -112,7 +112,7 @@ async def list_available_models(db: Optional[AsyncSession] = None) -> List[Model
     for item in (await get_all_models_unified(db))["ml_models"]:
         data = dict(item._data); path = data.get("file_path")
         if not path or not os.path.isfile(path): continue
-        feats = _features(data.get("features"))
+        feats = _features(data.get("features") or (DEFAULT_IRIS_FEATURES if data["name"] == "iris_classifier" else []))
         try:
             if not feats: feats = _onnx_features(_onnx_session(path)) if str(path).lower().endswith(".onnx") else _inferred_features(get_cached_model(path), path)
         except ModelInputError: feats = []
@@ -138,6 +138,8 @@ def _input_vector(features: Sequence[FeatureDefinition], inputs: Union[Dict[str,
 async def predict_with_model(db: Optional[AsyncSession], model_name: str, feature_inputs: Union[Dict[str, Any], List[Any]]) -> PredictResponse:
     started = time.time(); meta = await _metadata(db, model_name); path = meta.get("file_path")
     if not path or not os.path.isfile(path): raise ModelNotFoundError(f"Model '{model_name}' tidak ditemukan")
+    if model_name == "iris_classifier" and not meta.get("features"):
+        meta["features"] = DEFAULT_IRIS_FEATURES
     targets = meta.get("target_names") or (DEFAULT_IRIS_TARGETS if model_name == "iris_classifier" else [])
     if str(path).lower().endswith(".onnx"):
         session = _onnx_session(path); feats = _features(meta.get("features")) or _onnx_features(session); X = _input_vector(feats, feature_inputs, len(feats)); outputs = session.run(None, {session.get_inputs()[0].name: X}); first = np.asarray(outputs[0]); raw = first[0] if first.ndim > 1 else first.reshape(-1)[0]; probs = next((np.asarray(x)[0] for x in outputs[1:] if np.asarray(x).ndim == 2), None)
