@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 import time
 import logging
 import hashlib
@@ -21,6 +22,20 @@ _openai_client: Optional[AsyncOpenAI] = None
 
 LOCAL_DOCS_DIR = os.path.join("data", "documents")
 LOCAL_DOCS_FILE = os.path.join(LOCAL_DOCS_DIR, "documents_registry.json")
+
+
+def extract_pdf_text(file_bytes: bytes) -> Optional[str]:
+    """Extract text locally so PDF ingestion needs no external API."""
+    if not file_bytes:
+        return None
+    try:
+        from pypdf import PdfReader
+        pages = PdfReader(BytesIO(file_bytes)).pages
+        text = "\n\n".join((page.extract_text() or "").strip() for page in pages)
+        return text.strip() or None
+    except Exception as exc:
+        logger.warning("Local PDF extraction failed: %s", exc)
+        return None
 
 
 class UnifiedDocumentItem:

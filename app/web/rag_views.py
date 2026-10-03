@@ -6,7 +6,8 @@ from app.services.auth_service import get_current_user_optional
 from app.services.rag_service import (
     ingest_document,
     answer_rag_query,
-    get_recent_documents_unified
+    get_recent_documents_unified,
+    extract_pdf_text
 )
 from app.web.templates import render_template
 
@@ -41,7 +42,16 @@ async def rag_upload_htmx(
         final_content = content
         if file and file.filename:
             file_bytes = await file.read()
-            final_content = file_bytes.decode("utf-8", errors="ignore")
+            is_pdf = (file.content_type == "application/pdf" or file.filename.lower().endswith(".pdf"))
+            if is_pdf:
+                final_content = extract_pdf_text(file_bytes)
+                if not final_content and not content.strip():
+                    return HTMLResponse(
+                        """<div class="alert alert-warning mb-4"><span>PDF tidak berisi teks yang bisa dibaca. Pastikan pypdf terpasang atau gunakan PDF berbasis teks.</span></div>""",
+                        status_code=400
+                    )
+            elif not final_content:
+                final_content = file_bytes.decode("utf-8", errors="ignore")
 
         if not final_content or len(final_content.strip()) < 5:
             return HTMLResponse(
