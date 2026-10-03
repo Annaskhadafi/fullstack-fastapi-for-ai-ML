@@ -86,6 +86,15 @@ def list_documents(limit: int = 100) -> List[Dict[str, Any]]:
     return list(reversed(_load()))[:limit]
 
 
+def delete_document(document_id: str) -> bool:
+    items = _load()
+    kept = [item for item in items if item.get("id") != document_id]
+    if len(kept) == len(items):
+        return False
+    _save(kept)
+    return True
+
+
 def search(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     terms = set(re.findall(r"[\w-]{2,}", query.lower()))
     ranked = []
