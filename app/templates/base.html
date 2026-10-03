@@ -134,6 +134,14 @@
                 <span x-show="!sidebarCollapsed" class="ml-auto text-[10px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded">Baru</span>
             </a>
 
+            <a href="/grill-me"
+               :class="sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+               class="flex items-center py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/70 transition"
+               title="Market Forecast">
+                <i data-lucide="candlestick-chart" class="w-5 h-5 text-slate-500 flex-shrink-0"></i>
+                <span x-show="!sidebarCollapsed" class="truncate">Market Forecast</span>
+            </a>
+
             <div class="pt-3 mt-3 border-t border-slate-100">
                 <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 transition-opacity">Sistem</p>
 
@@ -218,6 +226,9 @@
             </a>
             <a href="/models" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-700">
                 <i data-lucide="box" class="w-4 h-4"></i> Model Hub
+            </a>
+            <a href="/grill-me" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-700">
+                <i data-lucide="candlestick-chart" class="w-4 h-4"></i> Market Forecast
             </a>
             {% if user.is_admin %}
             <a href="/admin/users" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-amber-700 font-medium">

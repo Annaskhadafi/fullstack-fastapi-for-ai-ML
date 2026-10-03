@@ -18,6 +18,7 @@ from app.web.ml_views import router as web_ml_router
 from app.web.models_views import router as web_models_router
 from app.web.face_views import router as web_face_router
 from app.web.admin_views import router as web_admin_router
+from app.web.forecast_views import router as web_forecast_router
 
 # Configure Logging
 logging.basicConfig(
@@ -91,6 +92,7 @@ app.include_router(web_ml_router)
 app.include_router(web_models_router)
 app.include_router(web_face_router)
 app.include_router(web_admin_router)
+app.include_router(web_forecast_router)
 
 
 @app.get("/api/health", tags=["Health"])
