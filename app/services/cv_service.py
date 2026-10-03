@@ -32,6 +32,32 @@ _onnx_sessions: Dict[str, Any] = {}
 _yolo_models: Dict[str, Any] = {}
 
 
+def inspect_cv_model(model_path: Optional[str]) -> Dict[str, Any]:
+    """Return deployment metadata without running inference."""
+    if model_path == "haar_cascade":
+        return {"format": "OpenCV Haar Cascade", "task": "face_detection", "input": "grayscale image", "labels": ["face"]}
+    path = model_path or os.path.join(settings.WEIGHTS_DIR, settings.CV_MODEL_NAME)
+    if not os.path.isfile(path):
+        return {"format": "unavailable", "task": "object_detection", "labels": []}
+    info: Dict[str, Any] = {"file": os.path.basename(path), "format": os.path.splitext(path)[1].lstrip(".").upper(), "size_mb": round(os.path.getsize(path) / 1048576, 2)}
+    if path.lower().endswith(".pt"):
+        model = get_yolo_pt_model(path)
+        info["task"] = getattr(model, "task", "object_detection") if model else "object_detection"
+        names = getattr(model, "names", None) if model else None
+        info["labels"] = list(names.values()) if isinstance(names, dict) else (list(names) if names else [])
+        info["input"] = "auto (Ultralytics)"
+    elif path.lower().endswith(".onnx"):
+        session = get_onnx_session(path)
+        input_meta = session.get_inputs()[0] if session else None
+        info["task"] = "object_detection"
+        info["input"] = list(input_meta.shape) if input_meta else "unavailable"
+        info["labels"] = COCO_CLASSES
+    else:
+        info["task"] = "object_detection"
+        info["labels"] = []
+    return info
+
+
 def get_onnx_session(model_path: Optional[str] = None):
     """Lazily loads and caches the ONNX runtime session for a given model path."""
     if not model_path:

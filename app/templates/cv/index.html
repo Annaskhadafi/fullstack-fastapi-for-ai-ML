@@ -50,6 +50,10 @@
                         <input type="file" name="image_file" accept="image/*" class="file-input file-input-bordered file-input-primary file-input-sm w-full bg-slate-50" id="file-input" onchange="previewSelectedImage(event)" />
                     </div>
 
+                    <div id="cv-model-inspector" class="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-900">
+                        Pilih model untuk melihat metadata input dan label.
+                    </div>
+
                     <!-- Preview Thumbnail -->
                     <div id="image-preview-container" class="hidden rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-h-52 flex items-center justify-center">
                         <img id="image-preview" src="" class="max-h-52 object-contain" />
@@ -60,7 +64,7 @@
                         <label class="label pb-1">
                             <span class="label-text font-semibold text-xs text-slate-600">Pilih Model CV:</span>
                         </label>
-                        <select name="model_name" id="cv-model-select" class="select select-bordered select-sm w-full bg-slate-50 text-slate-800">
+                        <select name="model_name" id="cv-model-select" onchange="inspectCvModel(this.value)" class="select select-bordered select-sm w-full bg-slate-50 text-slate-800">
                             <option value="default">YOLOv8 Nano (Default PyTorch / ONNX)</option>
                             <option value="haar_cascade">OpenCV Haar Cascade (Face Detector)</option>
                             {% for m in cv_models %}
@@ -335,5 +339,23 @@
             reader.readAsDataURL(file);
         }
     }
+
+    async function inspectCvModel(name) {
+        const target = document.getElementById('cv-model-inspector');
+        if (!target) return;
+        target.textContent = 'Membaca metadata model...';
+        try {
+            const response = await fetch('/cv/inspect/' + encodeURIComponent(name));
+            const info = await response.json();
+            const labels = Array.isArray(info.labels) ? info.labels : [];
+            target.innerHTML = '<strong>' + (info.format || 'Model') + '</strong> · ' + (info.task || 'object_detection') +
+                '<br>Input: ' + (Array.isArray(info.input) ? info.input.join(' × ') : (info.input || '—')) +
+                '<br>Label: ' + (labels.length ? labels.slice(0, 8).join(', ') + (labels.length > 8 ? ' ...' : '') : 'metadata label belum tersedia');
+        } catch (error) {
+            target.textContent = 'Metadata model belum tersedia.';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => inspectCvModel(document.getElementById('cv-model-select')?.value || 'default'));
 </script>
 {% endblock %}

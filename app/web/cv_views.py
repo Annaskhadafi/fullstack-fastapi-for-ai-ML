@@ -1,16 +1,22 @@
 import base64
 from typing import Optional
 from fastapi import APIRouter, Request, UploadFile, File, Form, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.services.auth_service import get_current_user_optional
-from app.services.cv_service import run_yolo_detection, apply_opencv_filter
+from app.services.cv_service import run_yolo_detection, apply_opencv_filter, inspect_cv_model
 from app.services.model_hub_service import get_all_models_unified, resolve_cv_model_path
 from app.web.templates import render_template
 
 router = APIRouter(prefix="/cv", tags=["Web CV"])
+
+
+@router.get("/inspect/{model_name}")
+async def cv_inspect_model(model_name: str, db: AsyncSession = Depends(get_db)):
+    model_path = await resolve_cv_model_path(model_name, db)
+    return inspect_cv_model(model_path)
 
 
 @router.get("", response_class=HTMLResponse)
