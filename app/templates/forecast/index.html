@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Grill Me • Market Forecast{% endblock %}
 {% block content %}
-<main class="p-4 md:p-8 max-w-7xl mx-auto w-full" x-data="forecastPage()" x-init="load()">
+<main class="p-4 md:p-8 max-w-7xl mx-auto w-full" x-data="forecastPage()" x-init="load(); timer = setInterval(() => load(), 5000)">
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-7">
         <div>
             <p class="text-xs font-bold uppercase tracking-[.18em] text-indigo-600">GRILL ME</p>
@@ -20,15 +20,22 @@
 
     <template x-if="data">
         <div>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Harga terakhir</p><p class="text-2xl font-black mt-2" x-text="data.current_price"></p><p class="text-xs text-slate-500 mt-1" x-text="data.symbol + ' · ' + data.timeframe"></p></div>
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
+                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Harga terakhir</p><p class="text-2xl font-black mt-2" x-text="data.live_price ?? data.current_price"></p><p class="text-xs text-slate-500 mt-1" x-text="data.symbol + ' · ' + data.timeframe"></p></div>
                 <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Proyeksi horizon 30 candle</p><p class="text-2xl font-black mt-2" x-text="data.projected_price"></p><p class="text-xs mt-1" :class="data.change_percent >= 0 ? 'text-emerald-600' : 'text-rose-600'" x-text="(data.change_percent >= 0 ? '+' : '') + data.change_percent + '%' "></p></div>
                 <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Arah pola</p><p class="text-2xl font-black mt-2" :class="data.direction === 'Bullish' ? 'text-emerald-600' : 'text-rose-600'" x-text="data.direction"></p><p class="text-xs text-slate-500 mt-1" x-text="'Error pola: ' + data.pattern_error"></p></div>
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Candle terakhir</p><p class="text-sm font-bold mt-3" x-text="new Date(data.last_bar_time).toLocaleString('id-ID')"></p><p class="text-xs text-emerald-600 mt-1">Auto-refresh 60 detik</p></div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Candle terakhir</p><p class="text-sm font-bold mt-3" x-text="new Date(data.last_bar_time).toLocaleString('id-ID')"></p><p class="text-xs text-emerald-600 mt-1">Update setiap 5 detik</p></div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Akurasi arah</p><p class="text-2xl font-black mt-2" x-text="data.history.direction_accuracy === null ? '—' : data.history.direction_accuracy + '%' "></p><p class="text-xs text-slate-500 mt-1" x-text="data.history.completed + ' prediksi selesai'"></p></div>
             </div>
             <div class="rounded-2xl bg-white border border-slate-200 p-5">
                 <div class="flex justify-between items-center mb-3"><h2 class="font-bold text-slate-900">Pola harga & proyeksi</h2><span class="badge badge-ghost">180 candle + 30 proyeksi</span></div>
                 <div class="h-80"><canvas id="forecast-chart"></canvas></div>
+            </div>
+            <div class="rounded-2xl bg-white border border-slate-200 p-5 mt-5">
+                <h2 class="font-bold text-slate-900">History prediksi vs aktual</h2>
+                <p class="text-xs text-slate-500 mt-1">Prediksi dikunci setelah candle selesai dan dinilai setelah 30 candle berikutnya selesai. History tetap dicatat selama server berjalan.</p>
+                <p class="text-sm mt-3" x-text="data.history.average_error_percent === null ? 'Menunggu hasil aktual' : 'Rata-rata error harga: ' + data.history.average_error_percent + '%' "></p>
+                <div class="overflow-x-auto mt-3"><table class="table table-sm"><thead><tr><th>Waktu candle</th><th>Harga awal</th><th>Prediksi</th><th>Aktual</th><th>Hasil arah</th><th>Error harga</th></tr></thead><tbody><template x-for="item in data.history.items" :key="item.key"><tr><td x-text="new Date(item.anchor_timestamp * 1000).toLocaleString('id-ID')"></td><td x-text="item.anchor_price"></td><td x-text="item.predicted_price"></td><td x-text="item.actual_price ?? 'Menunggu'"></td><td x-text="item.status === 'completed' ? (item.direction_correct ? 'Benar' : 'Salah') : 'Pending'"></td><td x-text="item.error_percent == null ? '—' : item.error_percent + '%' "></td></tr></template></tbody></table></div>
             </div>
         </div>
     </template>
@@ -36,10 +43,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 function forecastPage() { return {
-    symbol: 'BTCUSD', timeframe: 'M1', data: null, error: '', loading: false, chart: null,
-    async load() { this.loading = true; this.error = ''; try { const res = await fetch(`/grill-me/data?symbol=${encodeURIComponent(this.symbol)}&timeframe=${this.timeframe}`); const body = await res.json(); if (!body.ok) throw new Error(body.error); this.data = body.data; this.$nextTick(() => this.draw()); } catch (e) { this.error = e.message; } finally { this.loading = false; } },
+    symbol: 'BTCUSD', timeframe: 'M1', data: null, error: '', loading: false, chart: null, timer: null, destroy() { clearInterval(this.timer); if(this.chart) this.chart.destroy(); },
+    async load() { if (this.loading) return; const requestedSymbol = this.symbol; const requestedTimeframe = this.timeframe; this.loading = true; this.error = ''; try { const res = await fetch(`/grill-me/data?symbol=${encodeURIComponent(this.symbol)}&timeframe=${this.timeframe}`); const body = await res.json(); if (!body.ok) throw new Error(body.error); if (requestedSymbol !== this.symbol || requestedTimeframe !== this.timeframe) return; const changed = !this.data || this.data.last_bar_time !== body.data.last_bar_time || this.data.symbol !== body.data.symbol || this.data.timeframe !== body.data.timeframe; this.data = body.data; if(changed) this.$nextTick(() => this.draw()); } catch (e) { this.error = e.message; } finally { this.loading = false; } },
     draw() { const el = document.getElementById('forecast-chart'); if (!el || !this.data) return; if (this.chart) this.chart.destroy(); const labels = [...this.data.current.map((_, i) => i + 1), ...this.data.projection.map((_, i) => this.data.current.length + i + 1)]; this.chart = new Chart(el, { type: 'line', data: { labels, datasets: [{ label: 'Harga aktual', data: [...this.data.current, ...Array(this.data.projection.length).fill(null)], borderColor: '#4f46e5', pointRadius: 0, tension: .2 }, { label: 'Proyeksi fraktal', data: [...Array(this.data.current.length - 1).fill(null), this.data.current.at(-1), ...this.data.projection], borderColor: '#ef4444', borderDash: [6, 5], pointRadius: 0, tension: .2 }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, scales: { x: { display: false }, y: { grid: { color: '#e2e8f0' } } } } }); }
 }; }
-setInterval(() => { const root = document.querySelector('[x-data="forecastPage()"]'); const state = root && root._x_dataStack && root._x_dataStack[0]; if (state) state.load(); }, 60000);
 </script>
 {% endblock %}

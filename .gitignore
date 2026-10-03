@@ -60,5 +60,6 @@ app/static/faces/*
 app/static/uploads/*
 data/documents/*
 data/faces/*
+data/forecast/*
 !app/static/faces/.gitkeep
 !app/static/uploads/.gitkeep

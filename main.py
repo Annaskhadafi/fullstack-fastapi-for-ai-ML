@@ -1,5 +1,8 @@
 import os
 import logging
+import asyncio
+from contextlib import suppress
+from app.services.market_forecast_service import monitor_forecasts
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -52,7 +55,13 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not seed demo models on startup: {e}")
 
     logger.info(f"{settings.APP_NAME} is ready to serve traffic!")
-    yield
+    forecast_task = asyncio.create_task(monitor_forecasts())
+    try:
+        yield
+    finally:
+        forecast_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await forecast_task
     logger.info("Shutting down application...")
 
 
