@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Kelola Pengguna - Panel Super Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-base-200 pb-4">
+        <div>
+            <h1 class="text-3xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="users" class="w-8 h-8 text-primary"></i> Kelola Pengguna (RBAC)
+            </h1>
+            <p class="text-sm text-gray-400">
+                Panel kendali sederhana untuk mengatur hak akses akun: <strong>Super Admin</strong> atau <strong>User Biasa</strong>.
+            </p>
+        </div>
+        <div class="badge badge-primary badge-outline py-3 px-4 font-semibold text-xs">
+            <i data-lucide="shield-alert" class="w-4 h-4 mr-1"></i> Khusus Hak Akses Super Admin
+        </div>
+    </div>
+
+    <!-- Educational Explanation Box for Students -->
+    <div class="p-4 bg-primary/10 border border-primary/20 rounded-xl text-xs space-y-1.5 text-gray-300">
+        <h4 class="font-bold text-primary flex items-center gap-1.5 text-sm">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i> Konsep RBAC di Boilerplate Ini:
+        </h4>
+        <p>• <strong>Super Admin</strong>: Memiliki otoritas penuh, dapat melihat halaman ini, menaikkan/menurunkan peran pengguna, dan memblokir akun.</p>
+        <p>• <strong>User Biasa</strong>: Hanya dapat mengakses fitur AI (Computer Vision, RAG, ML) dan API Key milik sendiri.</p>
+        <p>• <em>Tips Kode</em>: Anda dapat memproteksi endpoint baru di FastAPI cukup dengan menambahkan <code>dependencies=[Depends(require_admin)]</code>.</p>
+    </div>
+
+    <!-- Users Table Card -->
+    <div class="card bg-base-100 border border-base-200 shadow-md">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table table-md w-full">
+                    <thead>
+                        <tr class="bg-base-200/80 text-gray-300 text-xs">
+                            <th>Nama & Email</th>
+                            <th>Peran (Role)</th>
+                            <th>Status Akun</th>
+                            <th>Tanggal Daftar</th>
+                            <th class="text-right">Aksi Cepat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                            {% include "admin/partials/user_row.html" with context %}
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-gray-500 text-xs">
+                                Belum ada data pengguna terdaftar.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

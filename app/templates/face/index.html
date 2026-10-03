@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+
+{% block title %}Face Recognition & Biometrics - UniFace - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ 
+    activeTab: 'scanner', 
+    mode: 'upload',
+    threshold: 0.45,
+    webcamActive: false,
+    regWebcamActive: false,
+    isProcessing: false,
+    liveTimer: null,
+    isLiveRunning: false,
+
+    startWebcam() {
+        const video = document.getElementById('face-webcam-video');
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } } })
+                .then((stream) => {
+                    video.srcObject = stream;
+                    this.webcamActive = true;
+                })
+                .catch((err) => {
+                    alert('Gagal mengakses kamera webcam: ' + err.message);
+                });
+        }
+    },
+
+    stopWebcam() {
+        const video = document.getElementById('face-webcam-video');
+        if (video && video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        this.webcamActive = false;
+        this.stopLive();
+    },
+
+    captureWebcamFrame() {
+        const video = document.getElementById('face-webcam-video');
+        const canvas = document.getElementById('face-webcam-canvas');
+        if (!video || !video.videoWidth || !video.videoHeight) return null;
+        
+        // OPTIMASI SPEED: Downscale ke max 480px dan quality 0.68
+        // Mengurangi ukuran payload dari ~2 MB ke ~25 KB untuk FPS tinggi & inferensi sub-50ms!
+        const maxWidth = 480;
+        let width = video.videoWidth;
+        let height = video.videoHeight;
+        if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', 0.68);
+    },
+
+    captureAndRecognize() {
+        if (this.isProcessing) return;
+        const b64 = this.captureWebcamFrame();
+        if (!b64) return;
+        this.isProcessing = true;
+        document.getElementById('webcam-base64-input').value = b64;
+        htmx.trigger('#face-webcam-form', 'submit');
+    },
+
+    handleLiveCycle() {
+        this.isProcessing = false;
+        if (this.isLiveRunning && this.webcamActive) {
+            // Trigger frame berikutnya segera setelah frame saat ini selesai diproses
+            this.liveTimer = setTimeout(() => {
+                if (this.isLiveRunning && this.webcamActive) {
+                    this.captureAndRecognize();
+                }
+            }, 100);
+        }
+    },
+
+    toggleLive() {
+        if (this.isLiveRunning) {
+            this.stopLive();
+        } else {
+            this.startLive();
+        }
+    },
+
+    startLive() {
+        if (!this.webcamActive) {
+            this.startWebcam();
+        }
+        this.isLiveRunning = true;
+        this.captureAndRecognize();
+    },
+
+    stopLive() {
+        this.isLiveRunning = false;
+        this.isProcessing = false;
+        if (this.liveTimer) {
+            clearTimeout(this.liveTimer);
+            this.liveTimer = null;
+        }
+    },
+
+    startRegWebcam() {
+        const video = document.getElementById('reg-webcam-video');
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    video.srcObject = stream;
+                    this.regWebcamActive = true;
+                })
+                .catch((err) => alert('Gagal mengakses kamera: ' + err.message));
+        }
+    },
+
+    captureRegPhoto() {
+        const video = document.getElementById('reg-webcam-video');
+        const canvas = document.createElement('canvas');
+        const maxWidth = 720;
+        let width = video.videoWidth || 640;
+        let height = video.videoHeight || 480;
+        if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+        const b64 = canvas.toDataURL('image/jpeg', 0.85);
+        document.getElementById('reg-photo-base64-input').value = b64;
+        document.getElementById('reg-preview-img').src = b64;
+        document.getElementById('reg-preview-box').classList.remove('hidden');
+    }
+}">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="scan-face" class="w-7 h-7 text-indigo-600"></i> Face Recognition & Anti-Spoofing (UniFace)
+            </h1>
+            <p class="text-sm text-slate-500">
+                Pendeteksi & pengenal biometrik <strong>SCRFD + ArcFace 512-dim</strong> dilengkapi filter keamanan <strong>MiniFASNet Liveness (Anti-Spoofing)</strong> untuk mencegah manipulasi foto layar HP/kertas.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="badge badge-outline border-slate-300 text-slate-700 text-xs py-3 px-3 shadow-2xs">
+                <i data-lucide="users" class="w-3.5 h-3.5 mr-1 text-indigo-600"></i> Terdaftar: <strong>{{ total_registered }}</strong>
+            </span>
+            <button @click="activeTab = 'register'" class="btn btn-primary btn-sm gap-1.5 shadow-sm">
+                <i data-lucide="user-plus" class="w-4 h-4"></i> Daftarkan Wajah
+            </button>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <button type="button" @click="activeTab = 'scanner'" 
+                :class="activeTab === 'scanner' ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-4 border-b-2 text-sm flex items-center gap-2 transition whitespace-nowrap">
+            <i data-lucide="scan" class="w-4 h-4"></i> Scanner & Pengenalan Wajah
+        </button>
+
+        <button type="button" @click="activeTab = 'database'; stopWebcam();" 
+                :class="activeTab === 'database' ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-4 border-b-2 text-sm flex items-center gap-2 transition whitespace-nowrap">
+            <i data-lucide="database" class="w-4 h-4"></i> Database Wajah ({{ total_registered }})
+        </button>
+
+        <button type="button" @click="activeTab = 'register'; stopWebcam();" 
+                :class="activeTab === 'register' ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-4 border-b-2 text-sm flex items-center gap-2 transition whitespace-nowrap">
+            <i data-lucide="user-plus" class="w-4 h-4"></i> Form Daftarkan Wajah
+        </button>
+
+        <button type="button" @click="activeTab = 'api'; stopWebcam();" 
+                :class="activeTab === 'api' ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-4 border-b-2 text-sm flex items-center gap-2 transition whitespace-nowrap">
+            <i data-lucide="code" class="w-4 h-4"></i> Integrasi REST API
+        </button>
+    </div>
+
+    <!-- ==================== TAB 1: SCANNER & RECOGNITION ==================== -->
+    <div x-show="activeTab === 'scanner'" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Control Panel (5 Cols) -->
+        <div class="lg:col-span-5 space-y-4">
+            <!-- Mode Switcher -->
+            <div class="tabs tabs-boxed bg-slate-100 p-1 rounded-xl">
+                <button type="button" @click="mode = 'upload'; stopWebcam();" 
+                        :class="mode === 'upload' ? 'bg-white text-indigo-600 font-bold shadow-xs' : 'text-slate-600 font-medium'" 
+                        class="tab flex-1 gap-2 rounded-lg transition text-xs">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Unggah Foto
+                </button>
+                <button type="button" @click="mode = 'webcam'; startWebcam();" 
+                        :class="mode === 'webcam' ? 'bg-white text-indigo-600 font-bold shadow-xs' : 'text-slate-600 font-medium'" 
+                        class="tab flex-1 gap-2 rounded-lg transition text-xs">
+                    <i data-lucide="video" class="w-4 h-4"></i> Kamera Webcam
+                </button>
+            </div>
+
+            <!-- Upload Mode Form -->
+            <div x-show="mode === 'upload'" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                    <i data-lucide="image" class="w-4 h-4 text-indigo-600"></i> Pilih Foto untuk Dikenali
+                </h3>
+
+                <form id="face-upload-form" 
+                      hx-post="/face/recognize-htmx" 
+                      hx-target="#face-result-container" 
+                      hx-encoding="multipart/form-data"
+                      hx-indicator="#face-spinner"
+                      class="space-y-4">
+                    
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-bold text-xs text-slate-700">File Foto Wajah</span></label>
+                        <input type="file" name="image_file" required accept="image/*" class="file-input file-input-bordered file-input-primary file-input-sm w-full bg-slate-50" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label pb-1">
+                            <span class="label-text font-bold text-xs text-slate-700">Ambang Batas Kemiripan (Threshold): <span class="text-indigo-600 font-extrabold" x-text="Math.round(threshold * 100) + '%'"></span></span>
+                        </label>
+                        <input type="range" name="threshold" min="0.20" max="0.80" step="0.05" x-model="threshold" class="range range-xs range-primary" />
+                        <div class="w-full flex justify-between text-[10px] text-slate-400 px-1 pt-1">
+                            <span>Fleksibel (20%)</span>
+                            <span>Standar (45%)</span>
+                            <span>Ketat (80%)</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full btn-sm shadow-sm gap-1.5 mt-2">
+                        <i data-lucide="scan" class="w-4 h-4"></i> Identifikasi Wajah
+                    </button>
+                </form>
+            </div>
+
+            <!-- Webcam Mode Form -->
+            <div x-show="mode === 'webcam'" x-cloak class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <i data-lucide="video" class="w-4 h-4 text-indigo-600"></i> Kamera Webcam Pengenal Wajah
+                    </h3>
+                    <span x-show="isLiveRunning" class="badge badge-error badge-sm text-white font-bold animate-pulse gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-white"></span> Live Auto-Scan
+                    </span>
+                </div>
+
+                <div class="relative rounded-xl overflow-hidden bg-slate-900 aspect-video flex items-center justify-center border border-slate-200 shadow-inner">
+                    <video id="face-webcam-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <canvas id="face-webcam-canvas" class="hidden"></canvas>
+                </div>
+
+                <form id="face-webcam-form" 
+                      hx-post="/face/recognize-htmx" 
+                      hx-target="#face-result-container" 
+                      hx-indicator="#face-spinner"
+                      @htmx:after-request="handleLiveCycle()"
+                      hx-on::after-request="handleLiveCycle()"
+                      class="space-y-3">
+                    <input type="hidden" name="webcam_base64" id="webcam-base64-input" />
+                    <input type="hidden" name="threshold" :value="threshold" />
+
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <button type="button" @click="captureAndRecognize()" class="btn btn-primary btn-sm shadow-sm gap-1.5">
+                            <i data-lucide="camera" class="w-4 h-4"></i> Ambil Foto & Cek
+                        </button>
+                        <button type="button" @click="toggleLive()" 
+                                :class="isLiveRunning ? 'btn-error text-white' : 'btn-outline border-slate-300 text-slate-700'"
+                                class="btn btn-sm gap-1.5 transition-all">
+                            <i data-lucide="radio" class="w-4 h-4"></i>
+                            <span x-text="isLiveRunning ? 'Stop Live' : 'Live Auto-Scan'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Result Viewport (7 Cols) -->
+        <div class="lg:col-span-7">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[500px] p-6">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <i data-lucide="user-check" class="w-5 h-5 text-indigo-600"></i> Hasil Pengenalan Biometrik
+                    </h3>
+                    <span id="face-spinner" class="htmx-indicator flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                        <span class="loading loading-spinner loading-xs"></span> Menganalisis Biometrik...
+                    </span>
+                </div>
+
+                <div id="face-result-container" class="space-y-4">
+                    <div class="text-center py-20 text-slate-400 space-y-2">
+                        <i data-lucide="scan-face" class="w-12 h-12 mx-auto text-slate-300"></i>
+                        <p class="text-xs font-semibold text-slate-600">Belum ada wajah yang dianalisis</p>
+                        <p class="text-[11px] text-slate-400">Unggah foto atau gunakan webcam untuk mengenali siapa saja yang sudah terdaftar.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 2: DATABASE WAJAH TERDAFTAR ==================== -->
+    <div x-show="activeTab === 'database'" x-cloak class="space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-sm">Daftar Individu Terdaftar</h3>
+                    <p class="text-xs text-slate-500">Database biometrik 512-dim ArcFace yang tersimpan di sistem</p>
+                </div>
+                <button @click="activeTab = 'register'" class="btn btn-primary btn-sm gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah Baru
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table w-full text-left">
+                    <thead class="bg-slate-50 text-slate-700 font-bold text-xs border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4">Foto</th>
+                            <th class="py-3 px-4">Nama Lengkap</th>
+                            <th class="py-3 px-4">No. Identitas / ID</th>
+                            <th class="py-3 px-4">Catatan / Dept</th>
+                            <th class="py-3 px-4">Terdaftar Pada</th>
+                            <th class="py-3 px-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for f in faces %}
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="py-3 px-4">
+                                <div class="avatar">
+                                    <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs">
+                                        <img src="{{ f.photo_url }}" alt="{{ f.name }}" class="object-cover w-full h-full" />
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="font-bold text-slate-900">{{ f.name }}</div>
+                                <span class="text-[10px] text-slate-400 font-mono">ID: {{ f.id[:8] }}...</span>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-xs font-semibold text-indigo-700">
+                                {{ f.identity_number or '-' }}
+                            </td>
+                            <td class="py-3 px-4 text-xs text-slate-600">
+                                {{ f.notes or '-' }}
+                            </td>
+                            <td class="py-3 px-4 text-xs text-slate-500 font-mono">
+                                {{ f.created_at }}
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <form hx-post="/face/{{ f.id }}/delete" hx-confirm="Yakin ingin menghapus data biometrik {{ f.name }}?" class="inline">
+                                    <button type="submit" class="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-50">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-12 text-slate-400">
+                                <i data-lucide="inbox" class="w-8 h-8 mx-auto text-slate-300 mb-2"></i>
+                                <p class="text-xs font-semibold text-slate-600">Belum ada wajah terdaftar di sistem.</p>
+                                <p class="text-[11px] text-slate-400">Silakan gunakan tab "Form Daftarkan Wajah" untuk menambahkan data biometrik pertama.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 3: FORM DAFTARKAN WAJAH ==================== -->
+    <div x-show="activeTab === 'register'" x-cloak class="max-w-2xl mx-auto space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i> Pendaftaran Wajah Baru
+            </h3>
+            <p class="text-xs text-slate-500">
+                Foto akan di-analisis oleh UniFace untuk mengekstrak vektor biometrik 512-dimensi yang unik untuk proses pencocokan otomatis.
+            </p>
+
+            <div id="reg-response-status"></div>
+
+            <form hx-post="/face/register-htmx" 
+                  hx-target="#reg-response-status" 
+                  hx-encoding="multipart/form-data"
+                  hx-indicator="#reg-spinner"
+                  class="space-y-4 text-left">
+                
+                <input type="hidden" name="webcam_photo_base64" id="reg-photo-base64-input" />
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-bold text-xs text-slate-800">Nama Lengkap *</span></label>
+                        <input type="text" name="name" required placeholder="Contoh: Budi Santoso" class="input input-bordered input-sm bg-white text-slate-900 border-slate-300 focus:border-indigo-600 text-sm" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-bold text-xs text-slate-800">No. Identitas / NIK / NIM</span></label>
+                        <input type="text" name="identity_number" placeholder="Contoh: 3201019900223" class="input input-bordered input-sm bg-white text-slate-900 border-slate-300 focus:border-indigo-600 text-sm" />
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1"><span class="label-text font-bold text-xs text-slate-800">Departemen / Catatan Tambahan</span></label>
+                    <input type="text" name="notes" placeholder="Contoh: Divisi IT / Mahasiswa Batch 2026" class="input input-bordered input-sm bg-white text-slate-900 border-slate-300 focus:border-indigo-600 text-sm" />
+                </div>
+
+                <!-- Photo Input: File or Webcam -->
+                <div class="space-y-2 pt-2 border-t border-slate-100">
+                    <label class="label pb-1"><span class="label-text font-bold text-xs text-slate-800">Sumber Foto Wajah *</span></label>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <span class="text-xs font-semibold text-slate-700 block">Opsi 1: Unggah File</span>
+                            <input type="file" name="photo_file" accept="image/*" class="file-input file-input-bordered file-input-primary file-input-xs w-full" />
+                        </div>
+
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <span class="text-xs font-semibold text-slate-700 block">Opsi 2: Ambil dari Kamera</span>
+                            <button type="button" @click="startRegWebcam()" class="btn btn-outline btn-xs w-full gap-1 border-slate-300 text-slate-700">
+                                <i data-lucide="video" class="w-3.5 h-3.5"></i> Buka Kamera
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Webcam Capture Container -->
+                    <div x-show="regWebcamActive" x-cloak class="p-3 bg-slate-900 rounded-xl space-y-2 text-center">
+                        <video id="reg-webcam-video" autoplay playsinline muted class="w-full max-h-48 object-cover rounded-lg mx-auto"></video>
+                        <button type="button" @click="captureRegPhoto()" class="btn btn-primary btn-xs px-4">
+                            <i data-lucide="camera" class="w-3.5 h-3.5"></i> Tangkap Foto Wajah
+                        </button>
+                    </div>
+
+                    <!-- Captured Preview Box -->
+                    <div id="reg-preview-box" class="hidden p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                        <img id="reg-preview-img" src="" class="w-14 h-14 object-cover rounded-lg border border-emerald-300" />
+                        <span class="text-xs text-emerald-800 font-semibold">Foto webcam berhasil diambil dan siap didaftarkan!</span>
+                    </div>
+                </div>
+
+                <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+                    <span id="reg-spinner" class="htmx-indicator flex items-center gap-1.5 text-xs text-indigo-600 font-medium mr-auto">
+                        <span class="loading loading-spinner loading-xs"></span> Mengekstrak biometrik...
+                    </span>
+                    <button type="button" @click="activeTab = 'scanner'" class="btn btn-ghost btn-sm">Batal</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-6 font-bold shadow-sm">
+                        Simpan & Daftarkan Wajah
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 4: REST API INTEGRATION ==================== -->
+    <div x-show="activeTab === 'api'" x-cloak class="max-w-4xl mx-auto space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+                        <i data-lucide="webhook" class="w-5 h-5 text-indigo-600"></i> Panduan Integrasi REST API (Microservice)
+                    </h3>
+                    <p class="text-xs text-slate-500">
+                        Gunakan endpoint FastAPI berikut untuk menghubungkan sistem biometrik ini ke aplikasi lain (Mobile App, Presensi Kantor, IoT Raspberry Pi, dll).
+                    </p>
+                </div>
+                <a href="/docs" target="_blank" class="btn btn-primary btn-sm gap-1.5 shadow-sm">
+                    <i data-lucide="book-open" class="w-4 h-4"></i> Buka Swagger Docs
+                </a>
+            </div>
+
+            <!-- API 1: Recognize -->
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <span class="badge badge-success font-bold text-xs text-white">POST</span>
+                    <code class="text-xs font-mono font-bold text-slate-900">/api/v1/face/recognize</code>
+                    <span class="text-xs text-slate-500">- Identifikasi & Cocokkan Wajah dari Gambar</span>
+                </div>
+                <div class="mockup-code bg-slate-900 text-slate-100 text-xs rounded-xl shadow-inner">
+                    <pre data-prefix="$"><code># Contoh Pemanggilan via cURL (Upload Gambar):
+curl -X POST "http://localhost:8000/api/v1/face/recognize" \
+  -F "file=@foto_presensi.jpg" \
+  -F "similarity_threshold=0.45"</code></pre>
+                </div>
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                    <span class="font-bold text-slate-800 block">Contoh Respon JSON:</span>
+                    <pre class="text-[11px] font-mono text-slate-700 bg-white p-2.5 rounded border border-slate-200 overflow-x-auto"><code>{
+  "success": true,
+  "total_faces": 1,
+  "total_registered_matched": 1,
+  "total_unknown": 0,
+  "total_spoof_attacks": 0,
+  "faces": [
+    {
+      "face_index": 1,
+      "status": "REGISTERED",
+      "is_real": true,
+      "liveness_score": 0.985,
+      "is_registered": true,
+      "name": "Budi Santoso",
+      "identity_number": "3201019900223",
+      "similarity": 0.892,
+      "confidence": 0.998,
+      "bbox": [120, 85, 290, 310]
+    }
+  ],
+  "execution_time_ms": 48.5
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="divider my-4"></div>
+
+            <!-- API 2: Register -->
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <span class="badge badge-primary font-bold text-xs text-white">POST</span>
+                    <code class="text-xs font-mono font-bold text-slate-900">/api/v1/face/register</code>
+                    <span class="text-xs text-slate-500">- Daftarkan Orang Baru</span>
+                </div>
+                <div class="mockup-code bg-slate-900 text-slate-100 text-xs rounded-xl shadow-inner">
+                    <pre data-prefix="$"><code># Contoh Pendaftaran via cURL:
+curl -X POST "http://localhost:8000/api/v1/face/register" \
+  -F "name=Siti Aminah" \
+  -F "identity_number=19950123" \
+  -F "file=@siti_face.jpg"</code></pre>
+                </div>
+            </div>
+
+            <div class="divider my-4"></div>
+
+            <!-- API 3: List -->
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <span class="badge badge-info font-bold text-xs text-white">GET</span>
+                    <code class="text-xs font-mono font-bold text-slate-900">/api/v1/face/list</code>
+                    <span class="text-xs text-slate-500">- Ambil Semua Daftar Orang Terdaftar</span>
+                </div>
+                <div class="mockup-code bg-slate-900 text-slate-100 text-xs rounded-xl shadow-inner">
+                    <pre data-prefix="$"><code>curl -X GET "http://localhost:8000/api/v1/face/list"</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

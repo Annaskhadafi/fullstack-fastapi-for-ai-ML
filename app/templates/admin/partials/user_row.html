@@ -1,0 +1,70 @@
+<tr id="user-row-{{ u.id }}" class="hover">
+    <td>
+        <div class="flex items-center gap-3">
+            <div class="avatar placeholder">
+                <div class="bg-neutral text-neutral-content rounded-full w-8 h-8 text-xs font-bold uppercase">
+                    {{ u.full_name[:2] if u.full_name else u.email[:2] }}
+                </div>
+            </div>
+            <div>
+                <div class="font-bold text-white text-xs">{{ u.full_name or "Tanpa Nama" }}</div>
+                <div class="text-[11px] text-gray-400">{{ u.email }}</div>
+            </div>
+        </div>
+        {% if error_msg %}
+        <div class="text-[10px] text-error mt-1">{{ error_msg }}</div>
+        {% endif %}
+    </td>
+    <td>
+        {% if u.role == 'admin' %}
+            <span class="badge badge-primary badge-sm font-semibold gap-1">
+                <i data-lucide="shield-check" class="w-3 h-3"></i> Super Admin
+            </span>
+        {% else %}
+            <span class="badge badge-ghost badge-sm text-gray-400 font-medium">
+                User Biasa
+            </span>
+        {% endif %}
+    </td>
+    <td>
+        {% if u.is_active %}
+            <span class="badge badge-success badge-xs gap-1 font-semibold">Aktif</span>
+        {% else %}
+            <span class="badge badge-error badge-xs gap-1 font-semibold">Nonaktif</span>
+        {% endif %}
+    </td>
+    <td class="text-xs text-gray-400 font-mono">
+        {{ u.created_at.strftime("%d/%m/%Y") }}
+    </td>
+    <td class="text-right">
+        <div class="flex items-center justify-end gap-1.5">
+            <!-- Toggle Role Button -->
+            <button type="button"
+                    hx-post="/admin/users/{{ u.id }}/toggle-role"
+                    hx-target="#user-row-{{ u.id }}"
+                    hx-swap="outerHTML"
+                    class="btn btn-xs btn-outline {% if u.role == 'admin' %}btn-warning{% else %}btn-primary{% endif %}"
+                    title="Ubah peran pengguna">
+                {% if u.role == 'admin' %}
+                    Jadikan User
+                {% else %}
+                    Jadikan Admin
+                {% endif %}
+            </button>
+
+            <!-- Toggle Active Status Button -->
+            <button type="button"
+                    hx-post="/admin/users/{{ u.id }}/toggle-active"
+                    hx-target="#user-row-{{ u.id }}"
+                    hx-swap="outerHTML"
+                    class="btn btn-xs btn-ghost {% if u.is_active %}text-error hover:bg-error/10{% else %}text-success hover:bg-success/10{% endif %}"
+                    title="Aktifkan/Nonaktifkan akun">
+                {% if u.is_active %}
+                    Blokir
+                {% else %}
+                    Aktifkan
+                {% endif %}
+            </button>
+        </div>
+    </td>
+</tr>

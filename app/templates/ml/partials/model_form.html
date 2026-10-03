@@ -1,0 +1,48 @@
+{% if active_model %}
+<div class="space-y-4 pt-2">
+    <!-- Model Description & Metrics -->
+    <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+        <p class="text-slate-700 font-medium leading-relaxed">{{ active_model.description }}</p>
+        {% if active_model.metrics %}
+        <div class="flex flex-wrap gap-1.5 pt-1 text-[11px]">
+            {% for k, v in active_model.metrics.items() %}
+            <span class="badge badge-xs bg-white text-slate-700 border border-slate-300 font-mono font-semibold">{{ k }}: {{ v }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Dynamic Form for Features -->
+    <form hx-post="/ml/predict-htmx"
+          hx-target="#ml-result-container"
+          hx-indicator="#ml-spinner"
+          class="space-y-3">
+
+        <input type="hidden" name="model_name" value="{{ active_model.name }}" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for feat in active_model.features %}
+            <div class="form-control">
+                <label class="label pb-1">
+                    <span class="label-text text-xs font-bold text-slate-800">{{ feat.label }}</span>
+                </label>
+                <input type="number"
+                       step="any"
+                       name="{{ feat.name }}"
+                       value="{{ feat.default }}"
+                       {% if feat.min_value is not none %}min="{{ feat.min_value }}"{% endif %}
+                       {% if feat.max_value is not none %}max="{{ feat.max_value }}"{% endif %}
+                       required
+                       class="input input-bordered input-sm bg-white text-slate-900 border-slate-300 focus:border-indigo-600 font-medium text-sm" />
+            </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full btn-sm shadow-sm mt-4 font-semibold gap-1.5">
+            <i data-lucide="play" class="w-4 h-4"></i> Jalankan Prediksi
+        </button>
+    </form>
+</div>
+{% else %}
+<p class="text-xs text-slate-500 py-4 text-center">Tidak ada model yang aktif.</p>
+{% endif %}

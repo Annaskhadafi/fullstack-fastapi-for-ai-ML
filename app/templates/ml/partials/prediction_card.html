@@ -1,0 +1,43 @@
+<div class="w-full space-y-6 animate-fade-in text-left">
+    <!-- Top Result Header -->
+    <div class="p-6 bg-gradient-to-br from-indigo-50 via-white to-slate-50 rounded-2xl border-2 border-indigo-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="space-y-1 text-center sm:text-left">
+            <span class="text-xs uppercase font-extrabold tracking-wider text-indigo-700">Hasil Prediksi Model</span>
+            <h2 class="text-3xl font-black text-slate-900 tracking-tight">
+                {{ result.prediction_label or result.prediction }}
+            </h2>
+            <p class="text-xs text-slate-600 font-medium">Model: <strong>{{ result.model_name }}</strong></p>
+        </div>
+        <div class="text-right">
+            <span class="badge badge-outline border-indigo-300 bg-white text-indigo-700 font-mono text-xs py-3 px-3 shadow-2xs">
+                <i data-lucide="zap" class="w-3.5 h-3.5 mr-1 text-amber-500"></i> {{ result.execution_time_ms }} ms
+            </span>
+        </div>
+    </div>
+
+    <!-- Probability Distribution Bars -->
+    {% if result.probabilities %}
+    <div class="space-y-3 pt-2">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i> Distribusi Probabilitas Kelas
+        </h4>
+
+        <div class="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+            {% for class_name, prob in result.probabilities.items() %}
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-bold">
+                    <span class="text-slate-800">{{ class_name }}</span>
+                    <span class="font-mono text-indigo-600 font-extrabold text-sm">{{ (prob * 100)|round(2) }}%</span>
+                </div>
+                <progress class="progress progress-primary w-full h-2.5 bg-slate-100" value="{{ (prob * 100)|round(2) }}" max="100"></progress>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-indigo-600 flex-shrink-0"></i>
+        <span>Prediksi dieksekusi secara instan di in-memory cache Python tanpa overhead database.</span>
+    </div>
+</div>

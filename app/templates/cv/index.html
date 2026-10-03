@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Computer Vision Studio - OpenCV & YOLO{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ mode: 'upload' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="camera" class="w-7 h-7 text-indigo-600"></i> Studio Computer Vision
+            </h1>
+            <p class="text-sm text-slate-500">
+                Deteksi objek multi-kelas (YOLOv8 PyTorch / ONNX) dan filter citra murni berbasis <strong>OpenCV Headless</strong>.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="/models" class="btn btn-outline btn-sm gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100">
+                <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Model Baru (.pt, .onnx)
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Grid: Controls on Left, Results on Right -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left Panel: Input & Controls (5 Cols) -->
+        <div class="lg:col-span-5 space-y-6">
+            <!-- Mode Switch Tabs -->
+            <div class="tabs tabs-boxed bg-slate-200/70 p-1 rounded-xl">
+                <button type="button" @click="mode = 'upload'; stopLiveIfRunning();" :class="mode === 'upload' ? 'bg-white text-indigo-600 font-bold shadow-xs' : 'text-slate-600 font-medium'" class="tab flex-1 gap-2 rounded-lg transition">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Unggah Gambar
+                </button>
+                <button type="button" @click="mode = 'webcam'; startWebcam();" :class="mode === 'webcam' ? 'bg-white text-indigo-600 font-bold shadow-xs' : 'text-slate-600 font-medium'" class="tab flex-1 gap-2 rounded-lg transition">
+                    <i data-lucide="video" class="w-4 h-4"></i> Kamera Webcam
+                </button>
+            </div>
+
+            <!-- Upload Mode Form -->
+            <div x-show="mode === 'upload'" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                    <i data-lucide="image" class="w-4 h-4 text-indigo-600"></i> Pilih File Gambar & Model
+                </h3>
+
+                <form id="cv-upload-form" hx-encoding="multipart/form-data" class="space-y-4">
+                    <!-- File Input -->
+                    <div class="form-control">
+                        <label class="label pb-1">
+                            <span class="label-text font-semibold text-xs text-slate-600">File Gambar:</span>
+                        </label>
+                        <input type="file" name="image_file" accept="image/*" class="file-input file-input-bordered file-input-primary file-input-sm w-full bg-slate-50" id="file-input" onchange="previewSelectedImage(event)" />
+                    </div>
+
+                    <!-- Preview Thumbnail -->
+                    <div id="image-preview-container" class="hidden rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-h-52 flex items-center justify-center">
+                        <img id="image-preview" src="" class="max-h-52 object-contain" />
+                    </div>
+
+                    <!-- Model Selector -->
+                    <div class="form-control">
+                        <label class="label pb-1">
+                            <span class="label-text font-semibold text-xs text-slate-600">Pilih Model CV:</span>
+                        </label>
+                        <select name="model_name" id="cv-model-select" class="select select-bordered select-sm w-full bg-slate-50 text-slate-800">
+                            <option value="default">YOLOv8 Nano (Default PyTorch / ONNX)</option>
+                            <option value="haar_cascade">OpenCV Haar Cascade (Face Detector)</option>
+                            {% for m in cv_models %}
+                            <option value="{{ m.name }}">{{ m.display_name }} ({{ m.framework }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Threshold Slider -->
+                    <div class="form-control" x-data="{ conf: 0.35 }">
+                        <label class="label pb-1">
+                            <span class="label-text font-semibold text-xs text-slate-600">Ambang Batas Confidence: <span class="font-bold text-indigo-600" x-text="Math.round(conf * 100) + '%'"></span></span>
+                        </label>
+                        <input type="range" name="confidence" min="0.10" max="0.95" step="0.05" x-model="conf" class="range range-xs range-primary" />
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-2 pt-2">
+                        <button type="button"
+                                hx-post="/cv/detect-htmx"
+                                hx-include="#cv-upload-form"
+                                hx-target="#cv-result-container"
+                                hx-indicator="#loading-spinner"
+                                class="btn btn-primary btn-sm shadow-sm gap-1.5">
+                            <i data-lucide="scan" class="w-4 h-4"></i> Deteksi Objek
+                        </button>
+
+                        <div class="dropdown dropdown-top dropdown-end w-full">
+                            <div tabindex="0" role="button" class="btn btn-outline btn-sm w-full gap-1.5 border-slate-300 text-slate-700">
+                                <i data-lucide="sliders" class="w-4 h-4"></i> Filter OpenCV
+                            </div>
+                            <ul tabindex="0" class="dropdown-content menu p-2 shadow-xl bg-white rounded-xl w-56 border border-slate-200 z-10 mb-2 text-xs">
+                                <li><button type="button" hx-post="/cv/filter-htmx?filter_type=grayscale" hx-include="#cv-upload-form" hx-target="#cv-result-container" hx-indicator="#loading-spinner">Grayscale (Hitam Putih)</button></li>
+                                <li><button type="button" hx-post="/cv/filter-htmx?filter_type=canny_edge" hx-include="#cv-upload-form" hx-target="#cv-result-container" hx-indicator="#loading-spinner">Canny Edge (Deteksi Tepi)</button></li>
+                                <li><button type="button" hx-post="/cv/filter-htmx?filter_type=gaussian_blur" hx-include="#cv-upload-form" hx-target="#cv-result-container" hx-indicator="#loading-spinner">Gaussian Blur (Penghalusan)</button></li>
+                                <li><button type="button" hx-post="/cv/filter-htmx?filter_type=contours" hx-include="#cv-upload-form" hx-target="#cv-result-container" hx-indicator="#loading-spinner">Contours (Garis Bentuk)</button></li>
+                                <li><button type="button" hx-post="/cv/filter-htmx?filter_type=face_detect" hx-include="#cv-upload-form" hx-target="#cv-result-container" hx-indicator="#loading-spinner">Deteksi Wajah (Haar Cascade)</button></li>
+                            </ul>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Webcam Mode Form -->
+            <div x-show="mode === 'webcam'" x-cloak class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <i data-lucide="video" class="w-4 h-4 text-indigo-600"></i> Live Stream Webcam
+                    </h3>
+                    <div class="flex items-center gap-1.5">
+                        <span id="live-indicator-badge" class="hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 animate-pulse">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span> Live Streaming
+                        </span>
+                        <span class="badge badge-accent badge-sm font-semibold text-white">Kamera Aktif</span>
+                    </div>
+                </div>
+
+                <!-- Live Video Element -->
+                <div class="relative rounded-xl overflow-hidden bg-slate-900 aspect-video flex items-center justify-center border border-slate-200 shadow-inner">
+                    <video id="webcam-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <canvas id="webcam-canvas" class="hidden"></canvas>
+                </div>
+
+                <form id="cv-webcam-form" class="space-y-3">
+                    <input type="hidden" name="webcam_base64" id="webcam-base64-input" />
+
+                    <!-- Webcam Controls: Model Selector & Confidence -->
+                    <div class="grid grid-cols-2 gap-3 pt-1">
+                        <div class="form-control">
+                            <label class="label pb-1">
+                                <span class="label-text font-semibold text-xs text-slate-600">Model CV:</span>
+                            </label>
+                            <select name="model_name" id="webcam-model-select" class="select select-bordered select-xs w-full bg-slate-50 text-slate-800">
+                                <option value="default">YOLOv8 Nano (Default PyTorch / ONNX)</option>
+                                <option value="haar_cascade">OpenCV Haar Cascade (Face)</option>
+                                {% for m in cv_models %}
+                                <option value="{{ m.name }}">{{ m.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-control" x-data="{ wconf: 0.35 }">
+                            <label class="label pb-1">
+                                <span class="label-text font-semibold text-xs text-slate-600">Confidence: <span class="font-bold text-indigo-600" x-text="Math.round(wconf * 100) + '%'"></span></span>
+                            </label>
+                            <input type="range" name="confidence" min="0.10" max="0.95" step="0.05" x-model="wconf" class="range range-xs range-primary" />
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-2 pt-2">
+                        <button type="button" onclick="captureAndDetect()" class="btn btn-primary btn-sm shadow-sm gap-1.5">
+                            <i data-lucide="camera" class="w-4 h-4"></i> Ambil Foto & Deteksi
+                        </button>
+
+                        <button type="button" id="btn-live-toggle" onclick="toggleLiveCapture()" class="btn btn-outline btn-sm border-slate-300 text-slate-700 gap-1.5 transition-all">
+                            <i data-lucide="radio" class="w-4 h-4"></i>
+                            <span>Live Auto Deteksi</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Right Panel: Output & Visualization (7 Cols) -->
+        <div class="lg:col-span-7">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[460px] p-6">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <i data-lucide="layers" class="w-5 h-5 text-indigo-600"></i> Hasil Analisis Citra
+                    </h3>
+                    <span id="loading-spinner" class="htmx-indicator flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                        <span class="loading loading-spinner loading-sm"></span> Memproses Inferensi...
+                    </span>
+                </div>
+
+                <!-- Target Container for HTMX -->
+                <div id="cv-result-container" class="flex flex-col items-center justify-center min-h-[350px]">
+                    <div class="text-center text-slate-400 space-y-3 py-12">
+                        <div class="inline-flex p-4 rounded-2xl bg-slate-100 text-slate-400">
+                            <i data-lucide="scan-line" class="w-10 h-10"></i>
+                        </div>
+                        <h4 class="font-bold text-slate-700 text-sm">Belum Ada Gambar yang Dianalisis</h4>
+                        <p class="text-xs max-w-sm mx-auto text-slate-400 leading-relaxed">
+                            Unggah gambar di panel kiri atau nyalakan kamera webcam untuk melihat deteksi bounding box YOLO dan filter OpenCV secara langsung.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/webcam.js"></script>
+<script>
+    let webcamCtl = null;
+    let isLiveActive = false;
+    let liveTimeout = null;
+
+    async function startWebcam() {
+        if (!webcamCtl) {
+            webcamCtl = new WebcamController('webcam-video', 'webcam-canvas', 'webcam-base64-input');
+        }
+        await webcamCtl.startCamera();
+    }
+
+    function stopLiveIfRunning() {
+        if (isLiveActive) {
+            toggleLiveCapture();
+        }
+    }
+
+    async function captureAndDetect() {
+        if (!webcamCtl) {
+            await startWebcam();
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        const b64 = webcamCtl.captureFrame();
+        if (!b64) {
+            alert("Kamera belum siap. Pastikan izin kamera telah diberikan di browser.");
+            return;
+        }
+
+        document.getElementById('webcam-base64-input').value = b64;
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) spinner.classList.add('htmx-request');
+
+        const form = document.getElementById('cv-webcam-form');
+        const formData = new FormData(form);
+
+        try {
+            const res = await fetch('/cv/detect-htmx', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                const html = await res.text();
+                document.getElementById('cv-result-container').innerHTML = html;
+                lucide.createIcons();
+            } else {
+                const errHtml = await res.text();
+                document.getElementById('cv-result-container').innerHTML = errHtml;
+            }
+        } catch (err) {
+            console.error('Detection error:', err);
+        } finally {
+            if (spinner && !isLiveActive) spinner.classList.remove('htmx-request');
+        }
+    }
+
+    function toggleLiveCapture() {
+        isLiveActive = !isLiveActive;
+        const btn = document.getElementById('btn-live-toggle');
+        const badge = document.getElementById('live-indicator-badge');
+
+        if (isLiveActive) {
+            if (btn) {
+                btn.classList.remove('btn-outline', 'border-slate-300', 'text-slate-700');
+                btn.classList.add('btn-error', 'text-white');
+                btn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i> <span>Stop Live Preview</span>';
+            }
+            if (badge) badge.classList.remove('hidden');
+            lucide.createIcons();
+            runLiveStep();
+        } else {
+            if (btn) {
+                btn.classList.remove('btn-error', 'text-white');
+                btn.classList.add('btn-outline', 'border-slate-300', 'text-slate-700');
+                btn.innerHTML = '<i data-lucide="radio" class="w-4 h-4"></i> <span>Live Auto Deteksi</span>';
+            }
+            if (badge) badge.classList.add('hidden');
+            if (liveTimeout) {
+                clearTimeout(liveTimeout);
+                liveTimeout = null;
+            }
+            const spinner = document.getElementById('loading-spinner');
+            if (spinner) spinner.classList.remove('htmx-request');
+            lucide.createIcons();
+        }
+    }
+
+    async function runLiveStep() {
+        if (!isLiveActive) return;
+
+        if (!webcamCtl) {
+            await startWebcam();
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        const b64 = webcamCtl.captureFrame();
+        if (b64 && isLiveActive) {
+            document.getElementById('webcam-base64-input').value = b64;
+            const spinner = document.getElementById('loading-spinner');
+            if (spinner) spinner.classList.add('htmx-request');
+
+            const form = document.getElementById('cv-webcam-form');
+            const formData = new FormData(form);
+
+            try {
+                const res = await fetch('/cv/detect-htmx', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (res.ok && isLiveActive) {
+                    const html = await res.text();
+                    document.getElementById('cv-result-container').innerHTML = html;
+                    lucide.createIcons();
+                }
+            } catch (err) {
+                console.error('Live step error:', err);
+            }
+        }
+
+        // Schedule next inference with 500ms delay to keep CPU smooth
+        if (isLiveActive) {
+            liveTimeout = setTimeout(runLiveStep, 500);
+        }
+    }
+
+    function previewSelectedImage(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('image-preview').src = e.target.result;
+                document.getElementById('image-preview-container').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Machine Learning Studio - Scikit-Learn / ONNX{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="brain-circuit" class="w-7 h-7 text-indigo-600"></i> Studio Machine Learning
+            </h1>
+            <p class="text-sm text-slate-500">
+                Eksekusi model tabular (Scikit-Learn/ONNX) dengan <strong>input form dinamis</strong>, perhitungan probabilitas kelas, dan estimasi prediktif real-time.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="/models" class="btn btn-outline btn-sm gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100">
+                <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Model ML Baru (.pkl, .joblib, .onnx)
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left Panel: Model Selection & Dynamic Form (5 Cols) -->
+        <div class="lg:col-span-5 space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <div class="form-control">
+                    <label class="label pb-1"><span class="label-text font-bold text-xs uppercase tracking-wide text-slate-500">Pilih Model Terdaftar</span></label>
+                    <select name="selected_model"
+                            class="select select-bordered select-sm w-full text-sm font-semibold bg-slate-50 text-slate-800 border-slate-300 focus:border-indigo-600"
+                            hx-get="/ml/form/"
+                            hx-target="#dynamic-form-container"
+                            hx-trigger="change"
+                            onchange="this.setAttribute('hx-get', '/ml/form/' + this.value)">
+                        {% for m in models %}
+                        <option value="{{ m.name }}" {% if active_model and active_model.name == m.name %}selected{% endif %}>
+                            {{ m.display_name }} ({{ m.task_type }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Dynamic Input Form Container -->
+                <div id="dynamic-form-container">
+                    {% include "ml/partials/model_form.html" with context %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Prediction Visualization & Confidence (7 Cols) -->
+        <div class="lg:col-span-7">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[460px] p-6">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i> Output & Probabilitas Inferensi
+                    </h3>
+                    <span id="ml-spinner" class="htmx-indicator flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                        <span class="loading loading-spinner loading-sm"></span> Menghitung Model...
+                    </span>
+                </div>
+
+                <!-- Target Container for HTMX Prediction -->
+                <div id="ml-result-container" class="flex flex-col items-center justify-center min-h-[350px]">
+                    <div class="text-center text-slate-400 space-y-3 py-12">
+                        <div class="inline-flex p-4 rounded-2xl bg-slate-100 text-slate-400">
+                            <i data-lucide="sparkle" class="w-10 h-10"></i>
+                        </div>
+                        <h4 class="font-bold text-slate-700 text-sm">Belum Ada Hasil Inferensi</h4>
+                        <p class="text-xs max-w-sm mx-auto text-slate-400 leading-relaxed">
+                            Masukkan parameter fitur di formulir sebelah kiri dan klik tombol <strong>"Jalankan Prediksi"</strong> untuk melihat kelas dan visualisasi probabilitasnya.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

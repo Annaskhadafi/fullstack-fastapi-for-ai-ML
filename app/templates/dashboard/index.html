@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="layout-dashboard" class="w-7 h-7 text-indigo-600"></i> Dashboard Kontrol
+            </h1>
+            <p class="text-sm text-slate-500">Selamat datang kembali, <strong>{{ user.full_name or user.email }}</strong></p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="badge badge-outline border-indigo-200 bg-indigo-50 text-indigo-700 py-3 px-3 text-xs font-semibold">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5 mr-1 text-indigo-600"></i> {{ "Super Administrator" if user.is_superadmin else ("Admin" if user.is_admin else "Pengguna Standar") }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tipe Database</span>
+                <div class="text-xl font-bold text-slate-800 mt-1">{{ stats.db_type.split(' ')[0] }}</div>
+                <div class="text-[11px] text-indigo-600 font-medium mt-0.5 truncate">{{ stats.db_type }}</div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="database" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Dokumen pgvector</span>
+                <div class="text-2xl font-bold text-slate-800 mt-1">{{ stats.docs_count }}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">Tersimpan di Vector DB</div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <i data-lucide="file-text" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Model Terdaftar</span>
+                <div class="text-2xl font-bold text-slate-800 mt-1">{{ stats.models_count }}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">Siap inferensi CV & ML</div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">AI LLM Provider</span>
+                <div class="text-lg font-bold text-slate-800 mt-1">{{ "Aktif" if (stats.openai_active or stats.gemini_active) else "Local Fallback" }}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">{{ "OpenAI / Gemini SDK" if (stats.openai_active or stats.gemini_active) else "Atur di .env" }}</div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <i data-lucide="sparkles" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Access Section -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
+        <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="globe-2" class="w-5 h-5 text-indigo-600"></i> Base API URL
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">URL utama ini mengikuti konfigurasi environment aplikasi.</p>
+            <div class="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mt-3">
+                <code id="base-api-url" class="text-sm font-mono text-indigo-600 font-semibold flex-1 truncate">{{ base_api_url|default(request.url.scheme ~ '://' ~ request.url.netloc, true) }}</code>
+                <button type="button" onclick="copyToClipboard(document.getElementById('base-api-url').textContent, 'copy-base-api-url')" id="copy-base-api-url" class="btn btn-xs btn-outline border-slate-300 text-slate-700 hover:bg-slate-200">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Salin
+                </button>
+            </div>
+        </div>
+
+        <!-- API Key Management Section -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="key" class="w-5 h-5 text-amber-500"></i> API Key Pribadi Anda
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Gunakan kunci ini untuk memanggil REST endpoint (misal: <code>/api/v1/cv/detect</code> atau <code>/api/v1/rag/query</code>) dengan header <code>X-API-Key</code>.
+                </p>
+            </div>
+            <form hx-post="/dashboard/regenerate-key" hx-target="#api-key-area" hx-confirm="Apakah Anda yakin ingin membuat API Key baru? Kunci lama tidak akan berlaku lagi.">
+                <button type="submit" class="btn btn-outline btn-sm gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Buat Kunci Baru
+                </button>
+            </form>
+        </div>
+
+        <div id="api-key-area">
+            {% if user.api_key %}
+                {% include "dashboard/partials/api_key_badge.html" with context %}
+            {% else %}
+                <p class="text-sm text-slate-400">Belum ada API Key. Klik "Buat Kunci Baru" untuk men-generate.</p>
+            {% endif %}
+        </div>
+
+        <div class="space-y-2">
+            <div class="flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-slate-800">Daftar API Key</h4>
+                <span class="text-xs text-slate-400">{{ (api_keys|default([], true))|length }} key</span>
+            </div>
+            <div id="api-key-list" class="space-y-2">
+                {% for key in api_keys|default([], true) %}
+                <div id="api-key-{{ key.id }}" class="flex flex-col sm:flex-row sm:items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <code class="text-xs font-mono text-slate-700 truncate">{{ key.key_prefix|default(key.api_key|default('API key', true), true) }}</code>
+                            <span class="badge badge-xs {{ 'badge-success' if key.is_active|default(true, true) else 'badge-ghost' }}">{{ 'Aktif' if key.is_active|default(true, true) else 'Dicabut' }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-0.5">{{ key.name|default('API Key', true) }}{% if key.created_at %} · dibuat {{ key.created_at }}{% endif %}</p>
+                    </div>
+                    <div class="flex items-center gap-1 self-end sm:self-auto">
+                        {% if key.is_active|default(true, true) %}
+                        <button type="button" class="btn btn-xs btn-outline border-amber-200 text-amber-700 hover:bg-amber-50" onclick="revokeApiKey('{{ key.id }}', this)">
+                            <i data-lucide="ban" class="w-3.5 h-3.5"></i> Revoke
+                        </button>
+                        {% endif %}
+                        <button type="button" class="btn btn-xs btn-ghost text-rose-600 hover:bg-rose-50" onclick="deleteApiKey('{{ key.id }}', this)">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-xs text-slate-400 py-2">Belum ada API key tersimpan.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Integration Quick Guide -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
+        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <i data-lucide="terminal" class="w-5 h-5 text-indigo-600"></i> Contoh Pemanggilan cURL API Eksternal
+        </h3>
+        <div class="mockup-code text-xs bg-slate-900 text-slate-100 rounded-xl">
+            <pre data-prefix="$"><code>curl -X POST "{{ base_api_url }}/api/v1/cv/detect" \</code></pre>
+            <pre data-prefix=">"><code>  -H "X-API-Key: {{ user.api_key if user.api_key else 'YOUR_API_KEY' }}" \</code></pre>
+            <pre data-prefix=">"><code>  -F "file=@gambar_sampel.jpg"</code></pre>
+        </div>
+    </div>
+</div>
+<script>
+async function revokeApiKey(id) { if (!confirm('Revoke API key ini?')) return; const r = await fetch('/api/v1/auth/api-keys/' + id, {method: 'DELETE'}); if (r.ok) location.reload(); else alert('API key gagal direvoke.'); }
+async function deleteApiKey(id) { if (!confirm('Hapus API key ini?')) return; const r = await fetch('/api/v1/auth/api-keys/' + id, {method: 'DELETE'}); if (r.ok) location.reload(); else alert('API key gagal dihapus.'); }
+</script>
+{% endblock %}

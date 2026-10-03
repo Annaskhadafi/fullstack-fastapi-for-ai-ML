@@ -1,0 +1,24 @@
+<div class="w-full space-y-4 animate-fade-in text-left">
+    <!-- Metrics Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-100 rounded-xl text-xs border border-slate-200">
+        <div class="flex items-center gap-2">
+            <span class="badge badge-secondary font-bold uppercase text-white">Filter: {{ filter_type }}</span>
+            <span class="text-slate-500 font-medium">Dimensi: {{ meta.width }}x{{ meta.height }}px</span>
+        </div>
+        {% if meta.faces_detected is defined %}
+            <span class="badge badge-accent badge-sm font-semibold text-white">{{ meta.faces_detected }} Wajah Terdeteksi</span>
+        {% elif meta.contour_count is defined %}
+            <span class="badge badge-accent badge-sm font-semibold text-white">{{ meta.contour_count }} Kontur Ditemukan</span>
+        {% endif %}
+    </div>
+
+    <!-- Processed Image Preview -->
+    <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center shadow-inner max-h-[400px]">
+        <img src="{{ image_base64 }}" alt="Hasil Filter OpenCV" class="max-h-[400px] w-auto object-contain mx-auto" />
+    </div>
+
+    <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+        <span>Filter OpenCV diterapkan secara langsung melalui pipeline native C/Python tanpa latensi.</span>
+    </div>
+</div>

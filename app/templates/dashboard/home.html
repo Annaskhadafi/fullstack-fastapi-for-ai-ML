@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}FastAPI AI Monolith - CV, RAG & Machine Learning{% endblock %}
+
+{% block content %}
+<div class="py-8 md:py-12 space-y-12">
+    <!-- Hero Section -->
+    <div class="text-center max-w-3xl mx-auto space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+            <span class="flex h-2 w-2 rounded-full bg-accent animate-pulse"></span>
+            100% Python Monolith • No Node.js Bridge • Vercel Ready
+        </div>
+        <h1 class="text-4xl md:text-6xl font-black tracking-tight text-white leading-tight">
+            Boilerplate AI Serbaguna untuk <span class="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">CV, RAG & ML</span>
+        </h1>
+        <p class="text-lg text-gray-300">
+            Dibuat untuk mengatasi kegagalan OpenCV di lingkungan JavaScript/Next.js. Menjalankan Computer Vision native, pencarian vektor dengan Neon DB (pgvector), dan model Machine Learning dalam satu repositori yang ramping dan cepat.
+        </p>
+
+        <div class="flex flex-wrap items-center justify-center gap-4 pt-2">
+            <a href="/cv" class="btn btn-primary px-6 shadow-lg shadow-primary/25">
+                <i data-lucide="camera" class="w-4 h-4"></i> Coba Computer Vision
+            </a>
+            <a href="/rag" class="btn btn-outline border-base-content/20 hover:border-primary px-6">
+                <i data-lucide="database" class="w-4 h-4"></i> Buka pgvector RAG
+            </a>
+            <a href="/docs" target="_blank" class="btn btn-ghost px-4">
+                <i data-lucide="code-2" class="w-4 h-4"></i> Swagger API
+            </a>
+        </div>
+    </div>
+
+    <!-- Feature Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+        <!-- CV Card -->
+        <div class="card bg-base-100 shadow-xl border border-base-200 hover:border-primary/50 transition">
+            <div class="card-body">
+                <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-primary flex items-center justify-center mb-2">
+                    <i data-lucide="eye" class="w-6 h-6"></i>
+                </div>
+                <h3 class="card-title text-xl text-white">Computer Vision & YOLO</h3>
+                <p class="text-sm text-gray-400">
+                    Deteksi objek multi-kelas dengan YOLOv8 ONNX dan OpenCV Headless. Mendukung upload foto serta snapshot live webcam browser tanpa kendala library C++.
+                </p>
+                <div class="card-actions justify-end mt-4">
+                    <a href="/cv" class="btn btn-sm btn-ghost text-primary">Jelajahi CV <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAG Card -->
+        <div class="card bg-base-100 shadow-xl border border-base-200 hover:border-secondary/50 transition">
+            <div class="card-body">
+                <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-secondary flex items-center justify-center mb-2">
+                    <i data-lucide="database-zap" class="w-6 h-6"></i>
+                </div>
+                <h3 class="card-title text-xl text-white">Neon DB pgvector RAG</h3>
+                <p class="text-sm text-gray-400">
+                    Simpan dan telusuri embedding dokumen langsung di PostgreSQL Neon DB menggunakan ekstensi pgvector. Dilengkapi integrasi LLM (Gemini/OpenAI).
+                </p>
+                <div class="card-actions justify-end mt-4">
+                    <a href="/rag" class="btn btn-sm btn-ghost text-secondary">Jelajahi RAG <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ML Card -->
+        <div class="card bg-base-100 shadow-xl border border-base-200 hover:border-accent/50 transition">
+            <div class="card-body">
+                <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-accent flex items-center justify-center mb-2">
+                    <i data-lucide="line-chart" class="w-6 h-6"></i>
+                </div>
+                <h3 class="card-title text-xl text-white">Tabular ML Predictor</h3>
+                <p class="text-sm text-gray-400">
+                    Formulir dinamis otomatis berdasarkan skema fitur model (Scikit-Learn/Joblib). Visualisasi probabilitas kelas dan estimasi confidence score instan.
+                </p>
+                <div class="card-actions justify-end mt-4">
+                    <a href="/ml" class="btn btn-sm btn-ghost text-accent">Jelajahi ML <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

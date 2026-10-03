@@ -1,0 +1,124 @@
+<div class="w-full space-y-4 animate-fade-in text-left">
+    <!-- Spoof Attack Urgent Alert Banner (if any spoofing detected) -->
+    {% if result.total_spoof_attacks > 0 %}
+    <div class="p-3 bg-rose-600 text-white rounded-xl shadow-md flex items-center justify-between gap-3 text-xs animate-bounce">
+        <div class="flex items-center gap-2 font-bold">
+            <i data-lucide="shield-alert" class="w-5 h-5 flex-shrink-0 text-white"></i>
+            <span>PERINGATAN: Terdeteksi {{ result.total_spoof_attacks }} serangan foto / layar HP (Spoof Attack)! Akses biometrik ditolak otomatis.</span>
+        </div>
+        <span class="badge badge-sm bg-white text-rose-700 font-extrabold px-2.5 py-1">BLOCKED</span>
+    </div>
+    {% endif %}
+
+    <!-- Summary Header Metrics -->
+    <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-primary font-bold text-white px-2.5 py-1">
+                {{ result.total_faces }} Wajah
+            </span>
+            {% if result.total_spoof_attacks > 0 %}
+            <span class="badge badge-error font-extrabold text-white px-2.5 py-1 shadow-xs animate-pulse">
+                ⚠️ {{ result.total_spoof_attacks }} Spoof Palsu
+            </span>
+            {% endif %}
+            {% if result.total_registered_matched > 0 %}
+            <span class="badge badge-success font-bold text-white px-2.5 py-1">
+                ✓ {{ result.total_registered_matched }} Terdaftar
+            </span>
+            {% endif %}
+            {% if result.total_unknown > 0 %}
+            <span class="badge badge-warning font-bold text-slate-800 px-2.5 py-1">
+                ? {{ result.total_unknown }} Tidak Dikenal
+            </span>
+            {% endif %}
+        </div>
+        <div class="text-slate-600 font-medium">
+            Inferensi: <span class="font-mono text-emerald-600 font-extrabold">{{ result.execution_time_ms }} ms</span>
+        </div>
+    </div>
+
+    <!-- Annotated Image Viewport -->
+    {% if result.annotated_image_base64 %}
+    <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center shadow-inner max-h-[460px]">
+        <img src="{{ result.annotated_image_base64 }}" alt="Hasil Analisis UniFace" class="max-h-[460px] w-auto object-contain mx-auto" />
+    </div>
+    {% endif %}
+
+    <!-- Face Cards Grid -->
+    {% if result.faces %}
+    <div class="space-y-2 pt-1">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> Detail Individu & Status Keaslian
+        </h4>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {% for f in result.faces %}
+            <div class="p-3.5 bg-white rounded-xl border {% if not f.is_real %}border-rose-400 bg-rose-50/30 ring-2 ring-rose-300{% elif f.is_registered %}border-emerald-300 bg-emerald-50/20{% else %}border-amber-300 bg-amber-50/20{% endif %} shadow-2xs space-y-2">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full {% if not f.is_real %}bg-rose-600 animate-ping{% elif f.is_registered %}bg-emerald-500 animate-pulse{% else %}bg-amber-500{% endif %}"></span>
+                        <h5 class="font-black text-sm {% if not f.is_real %}text-rose-700{% else %}text-slate-900{% endif %}">{{ f.name }}</h5>
+                    </div>
+                    {% if not f.is_real %}
+                        <span class="badge badge-xs bg-rose-600 text-white font-black border-none px-2 py-1 shadow-xs">
+                            SPOOF ATTACK
+                        </span>
+                    {% elif f.is_registered %}
+                        <span class="badge badge-xs bg-emerald-100 text-emerald-800 font-extrabold border-none px-2 py-1">
+                            TERDAFTAR ({{ (f.similarity * 100)|round(1) }}%)
+                        </span>
+                    {% else %}
+                        <span class="badge badge-xs bg-amber-100 text-amber-900 font-extrabold border-none px-2 py-1">
+                            UNKNOWN (LIVE)
+                        </span>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-100 text-slate-600">
+                    <div>
+                        <span class="text-slate-400 block">Status Liveness:</span>
+                        {% if f.is_real %}
+                        <span class="font-bold text-emerald-600 flex items-center gap-1">
+                            <i data-lucide="shield-check" class="w-3 h-3"></i> Manusia Asli ({{ (f.liveness_score * 100)|round(1) }}%)
+                        </span>
+                        {% else %}
+                        <span class="font-bold text-rose-600 flex items-center gap-1">
+                            <i data-lucide="shield-alert" class="w-3 h-3"></i> Layar / Foto Palsu
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">Kemiripan Database:</span>
+                        <span class="font-mono font-bold {% if f.is_registered %}text-emerald-600{% else %}text-slate-500{% endif %}">
+                            {{ (f.similarity * 100)|round(1) }}%
+                        </span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">Deteksi Detektor:</span>
+                        <span class="font-mono font-bold text-slate-700">{{ (f.confidence * 100)|round(1) }}%</span>
+                    </div>
+                    {% if f.identity_number %}
+                    <div>
+                        <span class="text-slate-400 block">No. Identitas:</span>
+                        <span class="font-mono font-semibold text-indigo-700">{{ f.identity_number }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        <i data-lucide="scan" class="w-8 h-8 mx-auto text-slate-400 mb-2"></i>
+        <p class="text-xs font-semibold">Tidak ada wajah yang terdeteksi pada gambar.</p>
+        <p class="text-[11px] text-slate-400">Pastikan pencahayaan cukup dan wajah menghadap langsung ke arah kamera.</p>
+    </div>
+    {% endif %}
+
+    <script>
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    </script>
+</div>

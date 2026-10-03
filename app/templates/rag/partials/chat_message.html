@@ -1,0 +1,56 @@
+<!-- User Bubble -->
+<div class="chat chat-end animate-fade-in">
+    <div class="chat-image avatar">
+        <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <i data-lucide="user" class="w-4 h-4"></i>
+        </div>
+    </div>
+    <div class="chat-header text-xs text-slate-500 font-semibold mb-1">Anda</div>
+    <div class="chat-bubble bg-indigo-600 text-white text-sm shadow-xs font-normal leading-relaxed">
+        {{ question }}
+    </div>
+</div>
+
+<!-- Bot Response Bubble -->
+<div class="chat chat-start animate-fade-in">
+    <div class="chat-image avatar">
+        <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-xs">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+        </div>
+    </div>
+    <div class="chat-header text-xs text-slate-500 font-semibold mb-1 flex items-center gap-2">
+        <span class="text-slate-900 font-bold">FastAPI RAG</span>
+        <span class="text-[11px] text-slate-500 font-medium">• {{ response.model }} ({{ response.execution_time_ms }} ms)</span>
+    </div>
+    <div class="chat-bubble bg-white text-slate-900 text-sm border border-slate-200 shadow-xs space-y-3 leading-relaxed font-normal">
+        <div class="whitespace-pre-wrap text-slate-800 text-sm">{{ response.answer }}</div>
+
+        <!-- Retrieved Chunks Accordion -->
+        {% if response.retrieved_chunks %}
+        <div class="pt-3 border-t border-slate-200 text-xs">
+            <div class="collapse collapse-arrow bg-slate-50 border border-slate-200 rounded-xl">
+                <input type="checkbox" />
+                <div class="collapse-title text-xs font-bold flex items-center gap-1.5 py-2.5 min-h-0 text-indigo-700">
+                    <i data-lucide="file-search" class="w-4 h-4 text-indigo-600"></i>
+                    Lihat {{ response.retrieved_chunks|length }} Konteks Terambil dari pgvector / Local Store
+                </div>
+                <div class="collapse-content space-y-2 text-xs pt-1">
+                    {% for chunk in response.retrieved_chunks %}
+                    <div class="p-3 rounded-lg bg-white border border-slate-200 space-y-1.5 shadow-2xs">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-900">
+                            <span class="truncate max-w-xs">{{ chunk.title }}</span>
+                            <span class="badge badge-xs bg-emerald-100 text-emerald-800 font-bold border-none">
+                                Skor: {{ (chunk.similarity_score * 100)|round(1) }}%
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded border border-slate-100 font-normal">
+                            "{{ chunk.content }}"
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

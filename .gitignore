@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+venv/
+ENV/
+
+# Database & SQLite
+*.sqlite
+*.sqlite3
+*.db
+
+# Model weights (keep small demo weights if needed, ignore large ones)
+weights/*.pt
+weights/*.bin
+weights/*.safetensors
+!weights/.gitkeep
+
+# IDEs & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Vercel & Node
+.vercel/
+node_modules/
+
+# Runtime data and downloaded model artifacts
+weights/*.onnx
+weights/*.joblib
+weights/models_registry.json
+app/static/faces/*
+app/static/uploads/*
+data/documents/*
+data/faces/*
+!app/static/faces/.gitkeep
+!app/static/uploads/.gitkeep

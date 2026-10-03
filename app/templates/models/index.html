@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}Model Hub - Upload & Kelola Model CV & ML{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ activeTab: 'cv' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="box" class="w-7 h-7 text-indigo-600"></i> Model Hub (Upload & Kelola)
+            </h1>
+            <p class="text-sm text-slate-500">
+                Pusat manajemen dan upload model <strong>Computer Vision</strong> (.pt, .onnx) dan <strong>Machine Learning</strong> (.pkl, .joblib, .onnx).
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="badge badge-outline border-slate-300 text-slate-600 text-xs py-3 px-3">
+                <i data-lucide="folder-check" class="w-3.5 h-3.5 mr-1 text-emerald-600"></i> Folder: weights/
+            </span>
+            <button onclick="document.getElementById('upload-modal').showModal()" class="btn btn-primary btn-sm gap-1.5 shadow-sm">
+                <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Model Baru
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stat Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Model Computer Vision</span>
+                <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ cv_models|length }}</h3>
+                <p class="text-xs text-slate-500 mt-0.5">YOLO (.pt), ONNX (.onnx)</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Model Machine Learning</span>
+                <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ ml_models|length }}</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Scikit-Learn (.pkl, .joblib, .onnx)</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="brain-circuit" class="w-6 h-6"></i>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Framework Didukung</span>
+                <h3 class="text-2xl font-bold text-slate-800 mt-1">4 Format</h3>
+                <p class="text-xs text-slate-500 mt-0.5">PyTorch, ONNX, Pickle, Joblib</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="layers" class="w-6 h-6"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="flex border-b border-slate-200">
+        <button type="button" @click="activeTab = 'cv'" 
+                :class="activeTab === 'cv' ? 'border-indigo-600 text-indigo-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-5 border-b-2 text-sm flex items-center gap-2 transition">
+            <i data-lucide="camera" class="w-4 h-4"></i> Computer Vision ({{ cv_models|length }})
+        </button>
+        <button type="button" @click="activeTab = 'ml'" 
+                :class="activeTab === 'ml' ? 'border-indigo-600 text-indigo-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="py-3 px-5 border-b-2 text-sm flex items-center gap-2 transition">
+            <i data-lucide="brain-circuit" class="w-4 h-4"></i> Machine Learning ({{ ml_models|length }})
+        </button>
+    </div>
+
+    <!-- Tab 1: CV Models Table -->
+    <div x-show="activeTab === 'cv'" class="space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="table w-full text-left">
+                    <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4">Nama Model</th>
+                            <th class="py-3 px-4">Framework</th>
+                            <th class="py-3 px-4">File Path</th>
+                            <th class="py-3 px-4">Deskripsi</th>
+                            <th class="py-3 px-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        <!-- Default Built-in CV Model -->
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="py-3 px-4">
+                                <div class="font-medium text-slate-900 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>YOLOv8 Nano (Default)</span>
+                                </div>
+                                <span class="text-xs text-slate-400">Built-in / Auto Download</span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="badge badge-sm badge-info">PyTorch / ONNX</span>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-xs text-slate-500">weights/yolov8n.pt</td>
+                            <td class="py-3 px-4 text-xs text-slate-500">Model object detection 80 kelas COCO dataset</td>
+                            <td class="py-3 px-4 text-right">
+                                <span class="badge badge-sm badge-ghost">Default</span>
+                            </td>
+                        </tr>
+                        <!-- Haar Cascade Built-in -->
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="py-3 px-4">
+                                <div class="font-medium text-slate-900 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>OpenCV Haar Cascade</span>
+                                </div>
+                                <span class="text-xs text-slate-400">Built-in OpenCV</span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="badge badge-sm badge-success">OpenCV XML</span>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-xs text-slate-500">cv2.haarcascades</td>
+                            <td class="py-3 px-4 text-xs text-slate-500">Deteksi wajah instan tanpa file eksternal</td>
+                            <td class="py-3 px-4 text-right">
+                                <span class="badge badge-sm badge-ghost">Default</span>
+                            </td>
+                        </tr>
+
+                        {% for m in cv_models %}
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="py-3 px-4">
+                                <div class="font-medium text-slate-900 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                    <span>{{ m.display_name }}</span>
+                                </div>
+                                <span class="text-xs text-slate-400 font-mono">{{ m.name }}</span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="badge badge-sm badge-secondary">{{ m.framework }}</span>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-xs">{{ m.file_path }}</td>
+                            <td class="py-3 px-4 text-xs text-slate-500">{{ m.description or '-' }}</td>
+                            <td class="py-3 px-4 text-right">
+                                <button type="button" class="btn btn-outline btn-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50 mr-1"
+                                        data-api-url="/api/v1/cv/detect"
+                                        data-api-model="{{ m.name }}"
+                                        data-api-kind="Computer Vision"
+                                        data-api-key="{{ user.api_key or '' }}"
+                                        onclick="openModelApiDialog(this)">
+                                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> API URL
+                                </button>
+                                <form hx-post="/models/{{ m.id }}/delete" hx-confirm="Yakin ingin menghapus model {{ m.display_name }}?" class="inline">
+                                    <button type="submit" class="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-50">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 2: ML Models Table -->
+    <div x-show="activeTab === 'ml'" class="space-y-4" x-cloak>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="table w-full text-left">
+                    <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4">Nama Model</th>
+                            <th class="py-3 px-4">Framework</th>
+                            <th class="py-3 px-4">Tipe Tugas</th>
+                            <th class="py-3 px-4">File Path</th>
+                            <th class="py-3 px-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for m in ml_models %}
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="py-3 px-4">
+                                <div class="font-medium text-slate-900 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>{{ m.display_name }}</span>
+                                </div>
+                                <span class="text-xs text-slate-400 font-mono">{{ m.name }}</span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="badge badge-sm badge-outline border-slate-300 text-slate-700">{{ m.framework }}</span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="badge badge-sm badge-info">{{ m.task_type }}</span>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-xs">{{ m.file_path }}</td>
+                            <td class="py-3 px-4 text-right">
+                                <button type="button" class="btn btn-outline btn-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50 mr-1"
+                                        data-api-url="/api/v1/ml/predict/{{ m.name }}"
+                                        data-api-model="{{ m.name }}"
+                                        data-api-kind="Machine Learning"
+                                        data-api-key="{{ user.api_key or '' }}"
+                                        onclick="openModelApiDialog(this)">
+                                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> API URL
+                                </button>
+                                <form hx-post="/models/{{ m.id }}/delete" hx-confirm="Yakin ingin menghapus model {{ m.display_name }}?" class="inline">
+                                    <button type="submit" class="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-50">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-slate-400 text-xs">
+                                Belum ada model ML kustom. Silakan upload file .pkl, .joblib, atau .onnx.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal Dialog -->
+    <dialog id="upload-modal" class="modal">
+        <div class="modal-box bg-white max-w-lg rounded-2xl border border-slate-200 shadow-xl p-6">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-slate-400 hover:text-slate-700">✕</button>
+            </form>
+            <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                <i data-lucide="upload" class="w-5 h-5 text-indigo-600"></i> Upload Model Baru
+            </h3>
+            <p class="text-xs text-slate-500 mt-1">
+                Upload model Machine Learning atau Computer Vision Anda ke server monolith.
+            </p>
+
+            <div id="upload-response-msg" class="mt-3"></div>
+
+            <form hx-post="/models/upload" 
+                  hx-target="#upload-response-msg" 
+                  hx-encoding="multipart/form-data"
+                  hx-indicator="#upload-spinner"
+                  class="space-y-4 mt-4 text-left">
+                
+                <div class="form-control">
+                    <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Pilih File Model (*.pt, *.onnx, *.pkl, *.joblib)</span></label>
+                    <input type="file" name="file" required class="file-input file-input-bordered file-input-primary file-input-sm w-full" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Kategori</span></label>
+                        <select name="category" required class="select select-bordered select-sm w-full">
+                            <option value="computer_vision">Computer Vision</option>
+                            <option value="machine_learning">Machine Learning</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Framework</span></label>
+                        <select name="framework" required class="select select-bordered select-sm w-full">
+                            <option value="pytorch_yolo">PyTorch YOLO (.pt)</option>
+                            <option value="onnx">ONNX Runtime (.onnx)</option>
+                            <option value="scikit-learn">Scikit-Learn (.pkl / .joblib)</option>
+                            <option value="pickle">Generic Python Pickle</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Nama Tampilan Model</span></label>
+                    <input type="text" name="display_name" required placeholder="Contoh: YOLOv8 Custom Helmet Detector" class="input input-bordered input-sm w-full" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Tipe Tugas (Task Type)</span></label>
+                        <select name="task_type" class="select select-bordered select-sm w-full">
+                            <option value="object_detection">Object Detection</option>
+                            <option value="classification">Classification</option>
+                            <option value="regression">Regression</option>
+                            <option value="segmentation">Segmentation</option>
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Deskripsi Singkat (Opsional)</span></label>
+                        <input type="text" name="description" placeholder="Model dilatih dengan 500 gambar..." class="input input-bordered input-sm w-full" />
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Feature Schema JSON (ML, opsional)</span>
+                    </label>
+                    <textarea name="features_json" rows="2" class="textarea textarea-bordered textarea-sm w-full font-mono text-xs"
+                              placeholder='[{"name":"feature_1","type":"number","default":0}]'></textarea>
+                    <span class="text-[11px] text-slate-400 mt-1">Urutan dan nama feature harus sama dengan input model.</span>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Class Names JSON (opsional)</span>
+                    </label>
+                    <input type="text" name="target_names_json" class="input input-bordered input-sm w-full font-mono text-xs"
+                           placeholder='["class_a", "class_b"]' />
+                </div>
+
+                <div class="pt-3 flex items-center justify-end gap-2">
+                    <span id="upload-spinner" class="htmx-indicator flex items-center gap-1.5 text-xs text-indigo-600 font-medium mr-auto">
+                        <span class="loading loading-spinner loading-xs"></span> Mengunggah file model...
+                    </span>
+                    <button type="button" onclick="document.getElementById('upload-modal').close()" class="btn btn-ghost btn-sm">Batal</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-5">Simpan & Daftarkan</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog id="model-api-modal" class="modal">
+        <div class="modal-box bg-white max-w-2xl rounded-2xl border border-slate-200 shadow-xl p-6">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-slate-400 hover:text-slate-700">✕</button>
+            </form>
+            <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                <i data-lucide="plug-zap" class="w-5 h-5 text-indigo-600"></i>
+                Konsumsi API Model
+            </h3>
+            <p id="model-api-title" class="text-xs text-slate-500 mt-1"></p>
+
+            <div class="mt-4 space-y-3">
+                <label class="text-xs font-semibold text-slate-700">API URL</label>
+                <div class="flex gap-2">
+                    <input id="model-api-url" readonly class="input input-bordered input-sm flex-1 font-mono text-xs bg-slate-50" />
+                    <button type="button" class="btn btn-outline btn-sm" onclick="copyModelApiValue('model-api-url', this)">Salin</button>
+                </div>
+
+                <label class="text-xs font-semibold text-slate-700">Contoh request</label>
+                <pre id="model-api-example" class="bg-slate-900 text-slate-100 rounded-lg p-3 text-xs overflow-x-auto whitespace-pre-wrap"></pre>
+
+                <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-900">
+                    Gunakan API key pada header <code class="font-mono font-semibold">X-API-Key</code>. Key tidak dimasukkan ke URL.
+                    <span id="model-api-key-status" class="block mt-1 font-medium"></span>
+                </div>
+            </div>
+        </div>
+    </dialog>
+</div>
+
+<script>
+function openModelApiDialog(button) {
+    const url = button.dataset.apiUrl;
+    const kind = button.dataset.apiKind;
+    const model = button.dataset.apiModel;
+    const key = button.dataset.apiKey;
+    const absoluteUrl = new URL(url, window.location.origin).href;
+    document.getElementById('model-api-title').textContent = `${model} · ${kind}`;
+    document.getElementById('model-api-url').value = absoluteUrl;
+    document.getElementById('model-api-example').textContent = kind === 'Machine Learning'
+        ? `curl -X POST "${absoluteUrl}" \\\n  -H "Content-Type: application/json" \\\n  -H "X-API-Key: ${key || 'YOUR_API_KEY'}" \\\n  -d '{"features":{"feature_1":0}}'\n\nfetch("${absoluteUrl}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", "X-API-Key": "${key || 'YOUR_API_KEY'}" },\n  body: JSON.stringify({ features: { feature_1: 0 } })\n})`
+        : `curl -X POST "${absoluteUrl}" \\\n  -H "X-API-Key: ${key || 'YOUR_API_KEY'}" \\\n  -F "file=@image.jpg" \\\n  -F "confidence=0.35"`;
+    document.getElementById('model-api-key-status').textContent = key ? 'API key aktif untuk akun Anda.' : 'Generate API key di Dashboard sebelum memanggil endpoint.';
+    document.getElementById('model-api-modal').showModal();
+}
+
+function copyModelApiValue(id, button) {
+    const input = document.getElementById(id);
+    navigator.clipboard.writeText(input.value).then(() => {
+        const label = button.textContent;
+        button.textContent = 'Tersalin';
+        setTimeout(() => button.textContent = label, 1200);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,6 @@
+<div class="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200" id="api-key-container">
+    <code class="text-sm font-mono text-indigo-600 font-bold flex-1 truncate">{{ api_key }}</code>
+    <button type="button" onclick="copyToClipboard('{{ api_key }}', 'copy-btn')" id="copy-btn" class="btn btn-xs btn-outline border-slate-300 text-slate-700 hover:bg-slate-200">
+        <i data-lucide="copy" class="w-3.5 h-3.5"></i> Salin
+    </button>
+</div>
