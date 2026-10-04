@@ -61,6 +61,10 @@ Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi *
 
 Beberapa halaman utama yang tersedia setelah server dijalankan:
 
+### EZ Template Login
+
+![EZ Template Login](docs/screenshots/login-ez-template.png)
+
 ### Computer Vision Studio
 
 ![Computer Vision Studio](docs/screenshots/computer-vision.png)
