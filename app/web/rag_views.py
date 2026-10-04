@@ -7,7 +7,9 @@ from app.services.rag_service import (
     ingest_document,
     answer_rag_query,
     get_recent_documents_unified,
-    extract_pdf_text
+    extract_pdf_text,
+    delete_document,
+    provider_settings
 )
 from app.web.templates import render_template
 
@@ -25,7 +27,8 @@ async def rag_page(
 
     return render_template(request, "rag/index.html", {
         "user": user,
-        "docs": docs
+        "docs": docs,
+        "provider": provider_settings()
     })
 
 
@@ -75,6 +78,21 @@ async def rag_upload_htmx(
             f"""<div class="alert alert-error mb-4"><span>Gagal mengindeks dokumen: {str(e)}</span></div>""",
             status_code=500
         )
+
+
+@router.delete("/documents/{document_id}", response_class=HTMLResponse)
+async def rag_delete_document(
+    document_id: str,
+    request: Request,
+    user=Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    deleted = await delete_document(db, document_id)
+    docs = await get_recent_documents_unified(db, limit=20)
+    return render_template(request, "rag/partials/doc_list.html", {
+        "docs": docs,
+        "success_message": "Dokumen berhasil dihapus." if deleted else "Dokumen tidak ditemukan."
+    })
 
 
 @router.post("/chat-htmx", response_class=HTMLResponse)

@@ -16,9 +16,9 @@ async def grill_me_page(request: Request, user=Depends(get_current_user_optional
 
 
 @router.get("/data")
-def grill_me_data(symbol: str = "BTCUSD", timeframe: str = "M1"):
+def grill_me_data(symbol: str = "BTCUSD", timeframe: str = "M1", use_mt5: bool = False):
     try:
-        return {"ok": True, "data": get_forecast(symbol.strip().upper(), timeframe)}
+        return {"ok": True, "data": get_forecast(symbol.strip().upper(), timeframe, use_mt5=use_mt5)}
     except (RuntimeError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=503)
 

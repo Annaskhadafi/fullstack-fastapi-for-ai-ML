@@ -12,7 +12,7 @@ from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
 import httpx
 from openai import AsyncOpenAI
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.document import Document
@@ -22,6 +22,27 @@ logger = logging.getLogger(__name__)
 
 _openai_client: Optional[AsyncOpenAI] = None
 _local_embedding_model: Any = None
+_provider = {"api_key": None, "model": None, "base_url": None}
+
+
+def provider_settings() -> Dict[str, Any]:
+    return {
+        "configured": bool(_provider["api_key"] or settings.OPENAI_API_KEY),
+        "model": _provider["model"] or settings.OPENAI_MODEL,
+        "base_url": _provider["base_url"] or settings.OPENAI_BASE_URL or "https://api.openai.com/v1",
+    }
+
+
+def update_provider(api_key: str, model: str, base_url: str) -> Dict[str, Any]:
+    _provider.update({"api_key": api_key.strip() or None, "model": model.strip() or None, "base_url": base_url.strip().rstrip("/") or None})
+    return provider_settings()
+
+
+def get_chat_client():
+    key = _provider["api_key"] or settings.OPENAI_API_KEY
+    if not key:
+        return None
+    return AsyncOpenAI(api_key=key, base_url=provider_settings()["base_url"])
 
 LOCAL_DOCS_DIR = os.path.join("data", "documents")
 LOCAL_DOCS_FILE = os.path.join(LOCAL_DOCS_DIR, "documents_registry.json")
@@ -88,6 +109,26 @@ def save_local_documents(docs: List[Dict[str, Any]]) -> None:
             json.dump(docs, f, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Failed to write local document store: {e}")
+
+
+async def delete_document(db: Optional[AsyncSession], document_id: str) -> bool:
+    """Delete one document from the local fallback and database when available."""
+    local_docs = load_local_documents()
+    remaining = [doc for doc in local_docs if str(doc.get("id")) != str(document_id)]
+    local_deleted = len(remaining) != len(local_docs)
+    if local_deleted:
+        save_local_documents(remaining)
+
+    db_deleted = False
+    if db is not None:
+        try:
+            result = await db.execute(delete(Document).where(Document.id == str(document_id)))
+            await db.commit()
+            db_deleted = bool(result.rowcount)
+        except Exception as exc:
+            logger.warning("Failed to delete document %s from database: %s", document_id, exc)
+            await db.rollback()
+    return local_deleted or db_deleted
 
 
 def get_openai_client() -> Optional[AsyncOpenAI]:
@@ -447,10 +488,10 @@ async def answer_rag_query(
     answer = ""
 
     # 1. Try OpenAI SDK Client first if configured
-    openai_client = get_openai_client()
+    openai_client = get_chat_client()
     if openai_client:
         try:
-            model_name = settings.OPENAI_MODEL
+            model_name = provider_settings()["model"]
             model_used = f"OpenAI SDK ({model_name})"
             system_prompt = "Kamu adalah asisten AI yang cerdas dan jujur. Jawab pertanyaan pengguna HANYA berdasarkan konteks dokumen yang diberikan. Jika jawaban tidak ditemukan, katakan dengan jelas."
             user_msg = f"Konteks Dokumen:\n{context_text if context_text else 'Tidak ada konteks dokumen yang relevan.'}\n\nPertanyaan:\n{question}\n\nJawaban:"

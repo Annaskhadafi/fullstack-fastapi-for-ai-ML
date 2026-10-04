@@ -56,6 +56,7 @@ node_modules/
 weights/*.onnx
 weights/*.joblib
 weights/models_registry.json
+weights/*/*
 app/static/faces/*
 app/static/uploads/*
 data/documents/*
@@ -63,3 +64,4 @@ data/faces/*
 data/forecast/*
 !app/static/faces/.gitkeep
 !app/static/uploads/.gitkeep
+!weights/.gitkeep

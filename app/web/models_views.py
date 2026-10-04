@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Optional
 from fastapi import APIRouter, Request, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -11,7 +11,8 @@ from app.services.auth_service import get_current_user_optional
 from app.services.model_hub_service import (
     get_all_models_unified,
     save_uploaded_model,
-    delete_model_unified
+    delete_model_unified,
+    resolve_teachable_asset
 )
 from app.web.templates import render_template
 
@@ -20,9 +21,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["Web Model Hub"])
 
 ALLOWED_EXTENSIONS = {
-    "computer_vision": [".pt", ".onnx"],
+    "computer_vision": [".pt", ".onnx", ".zip"],
     "machine_learning": [".pkl", ".joblib", ".onnx"]
 }
+
+
+@router.get("/teachable/{model_name}/{asset_path:path}")
+async def teachable_asset(model_name: str, asset_path: str):
+    asset = resolve_teachable_asset(model_name, asset_path)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset Teachable Machine tidak ditemukan")
+    return FileResponse(asset)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -68,6 +77,8 @@ async def upload_model_file(
     ext = os.path.splitext(filename)[1].lower()
 
     allowed = ALLOWED_EXTENSIONS.get(category, [".pt", ".onnx", ".pkl", ".joblib"])
+    if framework == "teachable_machine":
+        allowed = [".zip"]
     if ext not in allowed:
         return HTMLResponse(
             f"""<div class="alert alert-error text-sm py-2">

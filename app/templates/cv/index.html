@@ -68,7 +68,7 @@
                             <option value="default">YOLOv8 Nano (Default PyTorch / ONNX)</option>
                             <option value="haar_cascade">OpenCV Haar Cascade (Face Detector)</option>
                             {% for m in cv_models %}
-                            <option value="{{ m.name }}">{{ m.display_name }} ({{ m.framework }})</option>
+                            <option value="{{ m.name }}" data-framework="{{ m.framework }}">{{ m.display_name }} ({{ m.framework }})</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -83,13 +83,16 @@
 
                     <!-- Action Buttons -->
                     <div class="grid grid-cols-2 gap-2 pt-2">
-                        <button type="button"
+                        <button id="cv-server-detect-button" type="button"
                                 hx-post="/cv/detect-htmx"
                                 hx-include="#cv-upload-form"
                                 hx-target="#cv-result-container"
                                 hx-indicator="#loading-spinner"
                                 class="btn btn-primary btn-sm shadow-sm gap-1.5">
                             <i data-lucide="scan" class="w-4 h-4"></i> Deteksi Objek
+                        </button>
+                        <button id="cv-teachable-detect-button" type="button" onclick="runTeachablePrediction()" class="btn btn-primary btn-sm shadow-sm gap-1.5 hidden">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i> <span id="cv-teachable-action-label">Klasifikasi Gambar</span>
                         </button>
 
                         <div class="dropdown dropdown-top dropdown-end w-full">
@@ -124,7 +127,8 @@
 
                 <!-- Live Video Element -->
                 <div class="relative rounded-xl overflow-hidden bg-slate-900 aspect-video flex items-center justify-center border border-slate-200 shadow-inner">
-                    <video id="webcam-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <video id="webcam-video" autoplay playsinline muted class="relative z-0 w-full h-full object-cover"></video>
+                    <canvas id="pose-overlay" class="pointer-events-none absolute inset-0 z-10 block w-full h-full"></canvas>
                     <canvas id="webcam-canvas" class="hidden"></canvas>
                 </div>
 
@@ -137,11 +141,11 @@
                             <label class="label pb-1">
                                 <span class="label-text font-semibold text-xs text-slate-600">Model CV:</span>
                             </label>
-                            <select name="model_name" id="webcam-model-select" class="select select-bordered select-xs w-full bg-slate-50 text-slate-800">
+                            <select name="model_name" id="webcam-model-select" onchange="onWebcamModelChange()" class="select select-bordered select-xs w-full bg-slate-50 text-slate-800">
                                 <option value="default">YOLOv8 Nano (Default PyTorch / ONNX)</option>
                                 <option value="haar_cascade">OpenCV Haar Cascade (Face)</option>
                                 {% for m in cv_models %}
-                                <option value="{{ m.name }}">{{ m.display_name }}</option>
+                                <option value="{{ m.name }}" data-framework="{{ m.framework }}">{{ m.display_name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -199,17 +203,39 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8.3/dist/teachablemachine-pose.min.js"></script>
 <script src="/static/js/webcam.js"></script>
 <script>
+    // Teachable Machine Pose 0.8 still calls the legacy tf.fromPixels API.
+    if (window.tf && typeof tf.fromPixels !== 'function' && tf.browser?.fromPixels) {
+        tf.fromPixels = tf.browser.fromPixels.bind(tf.browser);
+    }
+
     let webcamCtl = null;
     let isLiveActive = false;
     let liveTimeout = null;
+
+    function setWebcamMirror(isMirrored) {
+        const video = document.getElementById('webcam-video');
+        if (video) {
+            video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
+        }
+    }
+
+    function onWebcamModelChange() {
+        const selected = document.querySelector('#webcam-model-select option:checked');
+        const isTeachable = selected?.dataset.framework === 'teachable_machine';
+        setWebcamMirror(isTeachable);
+        clearPoseOverlay();
+    }
 
     async function startWebcam() {
         if (!webcamCtl) {
             webcamCtl = new WebcamController('webcam-video', 'webcam-canvas', 'webcam-base64-input');
         }
         await webcamCtl.startCamera();
+        onWebcamModelChange();
     }
 
     function stopLiveIfRunning() {
@@ -219,9 +245,19 @@
     }
 
     async function captureAndDetect() {
-        if (!webcamCtl) {
+        const video = document.getElementById('webcam-video');
+        if (!webcamCtl || !video || video.readyState < 2) {
             await startWebcam();
-            await new Promise(r => setTimeout(r, 600));
+            for (let i = 0; i < 20; i++) {
+                if (video && video.readyState >= 2 && video.videoWidth > 0) break;
+                await new Promise(r => setTimeout(r, 100));
+            }
+        }
+
+        const selected = document.querySelector('#webcam-model-select option:checked');
+        if (selected?.dataset.framework === 'teachable_machine') {
+            await runTeachableWebcamPrediction();
+            return;
         }
 
         const b64 = webcamCtl.captureFrame();
@@ -285,12 +321,20 @@
             }
             const spinner = document.getElementById('loading-spinner');
             if (spinner) spinner.classList.remove('htmx-request');
+            clearPoseOverlay();
             lucide.createIcons();
         }
     }
 
     async function runLiveStep() {
         if (!isLiveActive) return;
+
+        const selected = document.querySelector('#webcam-model-select option:checked');
+        if (selected?.dataset.framework === 'teachable_machine') {
+            await runTeachableWebcamPrediction();
+            if (isLiveActive) liveTimeout = setTimeout(runLiveStep, 150);
+            return;
+        }
 
         if (!webcamCtl) {
             await startWebcam();
@@ -343,6 +387,22 @@
     async function inspectCvModel(name) {
         const target = document.getElementById('cv-model-inspector');
         if (!target) return;
+        const selected = document.querySelector('#cv-model-select option:checked');
+        const teachable = selected?.dataset.framework === 'teachable_machine';
+        document.getElementById('cv-server-detect-button')?.classList.toggle('hidden', teachable);
+        document.getElementById('cv-teachable-detect-button')?.classList.toggle('hidden', !teachable);
+        if (teachable) {
+            try {
+                const bundle = await loadTeachableBundle(name);
+                const task = bundle.isPose ? 'MediaPipe Pose' : 'image_classification';
+                const actionLabel = document.getElementById('cv-teachable-action-label');
+                if (actionLabel) actionLabel.textContent = bundle.isPose ? 'Deteksi Pose' : 'Klasifikasi Gambar';
+                target.innerHTML = '<strong>Google Teachable Machine</strong> · ' + task + '<br>Label: ' + (bundle.metadata.labels || []).join(', ') + '<br>Inferensi berjalan di browser.';
+            } catch (error) {
+                target.textContent = 'Bundle Teachable Machine belum bisa dimuat.';
+            }
+            return;
+        }
         target.textContent = 'Membaca metadata model...';
         try {
             const response = await fetch('/cv/inspect/' + encodeURIComponent(name));
@@ -353,6 +413,443 @@
                 '<br>Label: ' + (labels.length ? labels.slice(0, 8).join(', ') + (labels.length > 8 ? ' ...' : '') : 'metadata label belum tersedia');
         } catch (error) {
             target.textContent = 'Metadata model belum tersedia.';
+        }
+    }
+
+    const teachableBundles = {};
+    async function loadTeachableBundle(modelName) {
+        if (teachableBundles[modelName]) return teachableBundles[modelName];
+        const encoded = encodeURIComponent(modelName);
+        const base = '/models/teachable/' + encoded + '/';
+        const metadata = await fetch(base + 'metadata.json').then(response => response.json());
+        const isPose = metadata.packageName === '@teachablemachine/pose' || metadata.modelType === 'pose';
+        const model = isPose ? await tmPose.load(base + 'model.json', base + 'metadata.json') : await tf.loadLayersModel(base + 'model.json');
+        teachableBundles[modelName] = {model, metadata, isPose};
+        return teachableBundles[modelName];
+    }
+
+    const POSE_CONNECTIONS = [
+        // Torso & Shoulders
+        [5, 6], [5, 11], [6, 12], [11, 12],
+        // Left Arm
+        [5, 7], [7, 9],
+        // Right Arm
+        [6, 8], [8, 10],
+        // Left Leg
+        [11, 13], [13, 15],
+        // Right Leg
+        [12, 14], [14, 16]
+    ];
+
+    const TM_PALETTES = [
+        { color: '#f59e0b', bgSoft: '#fffbeb', text: '#b45309', border: '#fde68a' }, // Orange / Amber (e.g. Berdiri)
+        { color: '#f43f5e', bgSoft: '#fff1f2', text: '#be123c', border: '#fecdd3' }, // Pink / Rose (e.g. Rukuk)
+        { color: '#9333ea', bgSoft: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' }, // Purple (e.g. Sujud)
+        { color: '#0ea5e9', bgSoft: '#f0f9ff', text: '#0369a1', border: '#bae6fd' }, // Sky Blue
+        { color: '#10b981', bgSoft: '#ecfdf5', text: '#047857', border: '#a7f3d0' }, // Emerald
+        { color: '#6366f1', bgSoft: '#eef2ff', text: '#4338ca', border: '#c7d2fe' }, // Indigo
+    ];
+
+    let smoothedScores = null;
+    let currentLockedPose = null;
+    let candidatePose = null;
+    let candidateCount = 0;
+
+    function drawPoseSkeleton(ctx, pose, width, height, minScore = 0.25) {
+        if (!ctx || !pose?.keypoints) return;
+        const keypoints = pose.keypoints;
+
+        // Draw connecting lines (body only, no face lines)
+        ctx.lineWidth = Math.max(3, Math.round(width / 160));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#38bdf8'; // Sky blue like Teachable Machine
+
+        for (const [from, to] of POSE_CONNECTIONS) {
+            const p1 = keypoints[from];
+            const p2 = keypoints[to];
+            if (p1 && p2 && p1.score >= minScore && p2.score >= minScore) {
+                ctx.beginPath();
+                ctx.moveTo(p1.position.x, p1.position.y);
+                ctx.lineTo(p2.position.x, p2.position.y);
+                ctx.stroke();
+            }
+        }
+
+        // Draw keypoint dots (points only for nose, eyes, ears, and body joints)
+        const radius = Math.max(4, Math.round(width / 100));
+        for (const kp of keypoints) {
+            if (kp && kp.score >= minScore) {
+                ctx.beginPath();
+                ctx.arc(kp.position.x, kp.position.y, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#38bdf8';
+                ctx.fill();
+                ctx.lineWidth = Math.max(1.5, Math.round(radius / 3));
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+            }
+        }
+    }
+
+    function drawPoseOverlay(pose, w, h) {
+        const video = document.getElementById('webcam-video');
+        const canvas = document.getElementById('pose-overlay');
+        if (!video || !canvas || !pose?.keypoints) return;
+        const width = w || video.videoWidth || 640;
+        const height = h || video.videoHeight || 480;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        drawPoseSkeleton(ctx, pose, width, height, 0.25);
+    }
+
+    function clearPoseOverlay() {
+        const canvas = document.getElementById('pose-overlay');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx?.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        smoothedScores = null;
+        currentLockedPose = null;
+        candidatePose = null;
+        candidateCount = 0;
+    }
+
+    function renderPoseResult(target, sourceCanvas, estimated, prediction, labels) {
+        if (!target) return;
+        const width = sourceCanvas.width || 640;
+        const height = sourceCanvas.height || 480;
+
+        // Render snapshot with pose skeleton burned onto canvas
+        const displayCanvas = document.createElement('canvas');
+        displayCanvas.width = width;
+        displayCanvas.height = height;
+        const ctx = displayCanvas.getContext('2d');
+        ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+        if (estimated?.pose) {
+            drawPoseSkeleton(ctx, estimated.pose, width, height, 0.25);
+        }
+
+        const dataUrl = displayCanvas.toDataURL('image/jpeg', 0.92);
+
+        // Heavy exponential moving average smoothing (alpha 0.15) to absorb frame noise
+        let rawScores = (prediction || []).map(p => typeof p.probability === 'number' ? p.probability : 0);
+        if (isLiveActive) {
+            if (!smoothedScores || smoothedScores.length !== rawScores.length) {
+                smoothedScores = rawScores.slice();
+            } else {
+                const alpha = 0.15; // Smooth filter: dabs away webcam pixel jitter
+                smoothedScores = smoothedScores.map((prev, i) => prev * (1 - alpha) + rawScores[i] * alpha);
+            }
+        } else {
+            smoothedScores = rawScores.slice();
+        }
+
+        // Normalize predictions with smoothed scores
+        const rows = (prediction || []).map((item, idx) => {
+            const label = item.className || labels[idx] || `Class ${idx + 1}`;
+            const score = smoothedScores[idx] ?? 0;
+            return { label, score, index: idx };
+        });
+
+        // Instantaneous highest score
+        let instantTop = rows[0] || { label: '-', score: 0 };
+        rows.forEach(r => { if (r.score > instantTop.score) instantTop = r; });
+
+        // Hysteresis & Debounce Lock: Prevents flip-flopping when two poses are close (e.g. 52% vs 48%)
+        if (!currentLockedPose) {
+            currentLockedPose = instantTop.label;
+            candidatePose = null;
+            candidateCount = 0;
+        } else if (instantTop.label !== currentLockedPose) {
+            const currentScore = rows.find(r => r.label === currentLockedPose)?.score || 0;
+            const scoreDiff = instantTop.score - currentScore;
+
+            // Decisive switch if new pose is significantly ahead (> 15% margin)
+            if (scoreDiff >= 0.15) {
+                currentLockedPose = instantTop.label;
+                candidatePose = null;
+                candidateCount = 0;
+            } else {
+                // Otherwise require 4 consecutive frames (~600ms) of sustained dominance to switch
+                if (candidatePose === instantTop.label) {
+                    candidateCount++;
+                    if (candidateCount >= 4) {
+                        currentLockedPose = instantTop.label;
+                        candidatePose = null;
+                        candidateCount = 0;
+                    }
+                } else {
+                    candidatePose = instantTop.label;
+                    candidateCount = 1;
+                }
+            }
+        } else {
+            candidatePose = null;
+            candidateCount = 0;
+        }
+
+        const topClass = rows.find(r => r.label === currentLockedPose) || instantTop;
+
+        // Smooth in-place DOM update when live streaming to avoid flickering and keep sync
+        const existing = document.getElementById('teachable-pose-results-wrapper');
+        if (existing && isLiveActive) {
+            const img = document.getElementById('teachable-pose-preview-img');
+            if (img) img.src = dataUrl;
+
+            const topBadge = document.getElementById('teachable-top-badge');
+            if (topBadge) {
+                topBadge.textContent = `${topClass.label} (${(topClass.score * 100).toFixed(0)}%)`;
+            }
+
+            rows.forEach((item, idx) => {
+                const pct = Math.min(100, Math.max(0, Math.round(item.score * 100)));
+                const bar = document.getElementById(`tm-bar-${idx}`);
+                const val = document.getElementById(`tm-val-${idx}`);
+                const pctEl = document.getElementById(`tm-pct-${idx}`);
+                const activeBadge = document.getElementById(`tm-active-${idx}`);
+                if (bar) {
+                    bar.style.width = `${pct}%`;
+                    bar.textContent = pct >= 12 ? `${pct}%` : '';
+                }
+                if (val) {
+                    val.textContent = `${pct}%`;
+                    val.className = pct >= 12 ? 'hidden' : 'absolute left-2 text-[11px] font-bold';
+                }
+                if (pctEl) {
+                    pctEl.textContent = `${(item.score * 100).toFixed(1)}%`;
+                }
+                if (activeBadge) {
+                    activeBadge.className = (item.label === topClass.label && item.score > 0.1)
+                        ? 'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 ml-1.5'
+                        : 'hidden';
+                }
+            });
+            return;
+        }
+
+        // Standard full render (Preview ON TOP, Output DI BAWAH PREVIEW)
+        target.innerHTML = `
+            <div id="teachable-pose-results-wrapper" class="w-full space-y-4 animate-fade-in text-left">
+                <!-- Header Status Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-100 rounded-xl text-xs border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-primary font-bold text-white">MediaPipe Pose · Teachable Machine</span>
+                        <span class="text-slate-500 font-medium">Resolusi: ${width}x${height}px</span>
+                    </div>
+                    <div class="text-slate-600 font-medium flex items-center gap-1.5">
+                        Pose Terdeteksi: <span id="teachable-top-badge" class="badge badge-sm font-bold bg-emerald-100 text-emerald-800 border-none">${topClass.label} (${(topClass.score * 100).toFixed(0)}%)</span>
+                    </div>
+                </div>
+
+                <!-- Preview Image with Pose Skeleton Drawn Directly -->
+                <div class="rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center shadow-inner relative max-h-[380px]">
+                    <img id="teachable-pose-preview-img" src="${dataUrl}" alt="Preview MediaPipe Pose" class="max-h-[380px] w-auto object-contain mx-auto" />
+                </div>
+
+                <!-- Output Predictions Section (DI BAWAH PREVIEW) -->
+                <div class="p-4 md:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h4 class="font-bold text-slate-800 text-xs md:text-sm uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-600"></i> Output
+                        </h4>
+                        <span class="text-[11px] text-slate-400 font-medium">Prediksi Pose Realtime</span>
+                    </div>
+
+                    <div class="space-y-3 pt-1">
+                        ${rows.map((item, idx) => {
+                            const pal = TM_PALETTES[idx % TM_PALETTES.length];
+                            const pct = Math.min(100, Math.max(0, Math.round(item.score * 100)));
+                            const isTop = item.label === topClass.label && item.score > 0.1;
+                            return `
+                                <div class="flex items-center gap-3">
+                                    <div class="w-28 shrink-0 flex items-center">
+                                        <span class="w-2.5 h-2.5 rounded-full inline-block mr-2 shrink-0" style="background-color: ${pal.color};"></span>
+                                        <span class="text-xs font-bold truncate" style="color: ${pal.text};">${item.label}</span>
+                                        <span id="tm-active-${idx}" class="${isTop ? 'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 ml-1.5' : 'hidden'}">Aktif</span>
+                                    </div>
+                                    <div class="flex-1 h-7 rounded-lg relative overflow-hidden flex items-center border" style="background-color: ${pal.bgSoft}; border-color: ${pal.border};">
+                                        <div id="tm-bar-${idx}" class="h-full rounded-md transition-all duration-150 flex items-center justify-end pr-2 text-[11px] font-bold text-white shadow-xs"
+                                             style="width: ${pct}%; background-color: ${pal.color};">
+                                            ${pct >= 12 ? pct + '%' : ''}
+                                        </div>
+                                        <span id="tm-val-${idx}" class="${pct >= 12 ? 'hidden' : 'absolute left-2 text-[11px] font-bold'}" style="color: ${pal.text};">${pct}%</span>
+                                    </div>
+                                    <div class="w-14 text-right font-mono text-xs font-bold shrink-0" id="tm-pct-${idx}" style="color: ${pal.text};">
+                                        ${(item.score * 100).toFixed(1)}%
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    function renderTeachableScores(target, sourceImage, scores, labels, title) {
+        if (!target) return;
+        const rows = Array.from(scores).map((score, index) => ({
+            label: labels[index] || `Class ${index + 1}`,
+            score: score || 0,
+            index
+        })).sort((a, b) => b.score - a.score);
+
+        const topClass = rows[0] || { label: '-', score: 0 };
+        const imgSrc = sourceImage?.src || '';
+
+        target.innerHTML = `
+            <div class="w-full space-y-4 animate-fade-in text-left">
+                <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-100 rounded-xl text-xs border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-primary font-bold text-white">${title}</span>
+                    </div>
+                    <div class="text-slate-600 font-medium">
+                        Hasil: <span class="badge badge-sm font-bold bg-emerald-100 text-emerald-800 border-none">${topClass.label} (${(topClass.score * 100).toFixed(0)}%)</span>
+                    </div>
+                </div>
+
+                ${imgSrc ? `
+                <div class="rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center shadow-inner max-h-[380px]">
+                    <img src="${imgSrc}" class="max-h-[380px] w-auto object-contain mx-auto" alt="Preview Gambar">
+                </div>
+                ` : ''}
+
+                <!-- Output Section (DI BAWAH PREVIEW) -->
+                <div class="p-4 md:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                    <h4 class="font-bold text-slate-800 text-xs md:text-sm uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-600"></i> Output
+                    </h4>
+                    <div class="space-y-3 pt-1">
+                        ${rows.map((item, idx) => {
+                            const pal = TM_PALETTES[idx % TM_PALETTES.length];
+                            const pct = Math.min(100, Math.max(0, Math.round(item.score * 100)));
+                            return `
+                                <div class="space-y-1.5">
+                                    <div class="flex justify-between items-center text-xs font-bold" style="color: ${pal.text};">
+                                        <span class="flex items-center">
+                                            <span class="w-2.5 h-2.5 rounded-full inline-block mr-2" style="background-color: ${pal.color};"></span>
+                                            ${item.label}
+                                        </span>
+                                        <span class="font-mono">${(item.score * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div class="w-full h-7 rounded-lg relative overflow-hidden flex items-center border" style="background-color: ${pal.bgSoft}; border-color: ${pal.border};">
+                                        <div class="h-full rounded-md transition-all duration-300 flex items-center justify-end pr-2 text-[11px] font-bold text-white shadow-xs"
+                                             style="width: ${pct}%; background-color: ${pal.color};">
+                                            ${pct >= 12 ? pct + '%' : ''}
+                                        </div>
+                                        <span class="${pct >= 12 ? 'hidden' : 'absolute left-2 text-[11px] font-bold'}" style="color: ${pal.text};">${(item.score * 100).toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    async function runTeachablePrediction() {
+        const file = document.getElementById('file-input')?.files[0];
+        const selected = document.querySelector('#cv-model-select option:checked');
+        const target = document.getElementById('cv-result-container');
+        if (!file || !selected || !target) {
+            target.innerHTML = '<div class="alert alert-warning text-sm">Pilih gambar terlebih dahulu.</div>';
+            return;
+        }
+        target.innerHTML = '<div class="flex items-center gap-2 text-sm text-indigo-600"><span class="loading loading-spinner loading-sm"></span> Menjalankan model Teachable Machine...</div>';
+        try {
+            const bundle = await loadTeachableBundle(selected.value);
+            const image = document.getElementById('image-preview');
+            const w = image.naturalWidth || image.width || 640;
+            const h = image.naturalHeight || image.height || 480;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, w, h);
+
+            if (bundle.isPose) {
+                const estimated = await bundle.model.estimatePose(canvas);
+                const prediction = await bundle.model.predict(estimated.posenetOutput);
+                renderPoseResult(target, canvas, estimated, prediction, bundle.metadata.labels || []);
+                return;
+            }
+
+            const tensor = tf.tidy(() => tf.browser.fromPixels(canvas).resizeBilinear([224, 224]).toFloat().div(127.5).sub(1).expandDims(0));
+            const output = bundle.model.predict(tensor);
+            const scores = await (Array.isArray(output) ? output[0] : output).data();
+            tensor.dispose();
+            if (Array.isArray(output)) output.forEach(item => item.dispose()); else output.dispose();
+            renderTeachableScores(target, image, scores, bundle.metadata.labels || [], 'Hasil Klasifikasi');
+        } catch (error) {
+            target.innerHTML = '<div class="alert alert-error text-sm">Model Teachable Machine gagal dijalankan: ' + error.message + '</div>';
+        }
+    }
+
+    async function runTeachableWebcamPrediction() {
+        const selected = document.querySelector('#webcam-model-select option:checked');
+        const video = document.getElementById('webcam-video');
+        const target = document.getElementById('cv-result-container');
+        if (!selected || !video || !target || video.readyState < 2) return;
+
+        try {
+            const bundle = await loadTeachableBundle(selected.value);
+
+            // Ensure video element properties width and height exist for PoseNet
+            const w = video.videoWidth || 640;
+            const h = video.videoHeight || 480;
+            video.width = w;
+            video.height = h;
+
+            // Mirror frame onto canvas matching Teachable Machine's webcam training setup
+            const flipCanvas = document.createElement('canvas');
+            flipCanvas.width = w;
+            flipCanvas.height = h;
+            const fctx = flipCanvas.getContext('2d');
+            fctx.save();
+            fctx.translate(w, 0);
+            fctx.scale(-1, 1);
+            fctx.drawImage(video, 0, 0, w, h);
+            fctx.restore();
+
+            if (bundle.isPose) {
+                // Run PoseNet estimation on the valid, mirrored canvas
+                const estimated = await bundle.model.estimatePose(flipCanvas);
+
+                // Update the real-time skeleton overlay on the webcam video
+                drawPoseOverlay(estimated.pose, w, h);
+
+                // Predict classes with trained dense model
+                const prediction = await bundle.model.predict(estimated.posenetOutput);
+
+                // Render output with skeleton burned into image, and prediction bars below preview
+                renderPoseResult(target, flipCanvas, estimated, prediction, bundle.metadata.labels || []);
+                return;
+            }
+
+            clearPoseOverlay();
+            const tensor = tf.tidy(() => tf.browser.fromPixels(flipCanvas).resizeBilinear([224, 224]).toFloat().div(127.5).sub(1).expandDims(0));
+            const output = bundle.model.predict(tensor);
+            const scores = await (Array.isArray(output) ? output[0] : output).data();
+            tensor.dispose();
+            if (Array.isArray(output)) output.forEach(item => item.dispose()); else output.dispose();
+            renderTeachableScores(target, flipCanvas, scores, bundle.metadata.labels || [], 'Hasil Teachable Machine');
+        } catch (error) {
+            clearPoseOverlay();
+            target.innerHTML = '<div class="alert alert-error text-sm">Model Teachable Machine gagal dijalankan: ' + error.message + '</div>';
+            isLiveActive = false;
         }
     }
 

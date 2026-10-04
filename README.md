@@ -1,6 +1,6 @@
 # 🚀 Python AI Monolith Boilerplate
 
-Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi **Computer Vision (OpenCV + YOLO)**, **RAG (PostgreSQL Neon DB + pgvector)**, dan **Machine Learning (Scikit-Learn/ONNX)** dengan antarmuka interaktif **Jinja2 + HTMX + Tailwind CSS**.
+Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi **Computer Vision (OpenCV + YOLO + Teachable Machine)**, **RAG (PostgreSQL Neon DB + pgvector & Vectorless)**, dan **Machine Learning (Scikit-Learn/ONNX)** dengan antarmuka interaktif **Jinja2 + HTMX + Tailwind CSS**.
 
 > **💡 Mengapa Boilerplate ini Dibuat?**
 > Menjalankan pustaka native seperti OpenCV atau model deteksi objek langsung di lingkungan JavaScript / Node.js (Next.js) sering kali gagal akibat kendala library C++ sistem (`libGL.so`), batasan arsitektur platform, maupun ukuran bundle serverless yang membengkak.
@@ -10,20 +10,28 @@ Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi *
 
 ## ✨ Fitur Utama
 
-- **👁️ Computer Vision Studio**:
+- **👁️ Computer Vision Studio & Teachable Machine**:
   - Deteksi objek multi-kelas (80 kelas COCO) berbasis **YOLOv8 ONNX** yang sangat cepat & hemat memori.
+  - Integrasi **Teachable Machine**: Mendukung klasifikasi gambar (*Image Classification*) dan **MediaPipe Pose** landmark.
+  - Tampilan prediksi real-time di bawah video preview dengan pembersihan visualisasi landmark (tanpa garis wajah yang mengganggu).
+  - Penstabil prediksi cerdas berbasis **Exponential Moving Average (EMA)** dan **Hysteresis State Lock** agar label tidak melompat-lompat saat objek diam.
   - Dukungan pemrosesan **Unggah File Gambar** dan **Live Snapshot Kamera Webcam** via browser (`webcam.js`).
   - Pipeline filter klasik **OpenCV Headless**: Canny Edge, Grayscale, Gaussian Blur, Contours, dan Deteksi Wajah (Haar Cascade).
-- **📚 pgvector RAG (Retrieval-Augmented Generation)**:
+- **📚 Knowledge Base & pgvector RAG (Retrieval-Augmented Generation)**:
   - Tersambung langsung ke database **PostgreSQL (Neon DB)** dengan ekstensi **pgvector** (tanpa perlu biaya ekstra untuk database vektor terpisah).
-  - Adapter modular embedding (Google Gemini `text-embedding-004`, OpenAI, atau local fallback).
-  - Chatbot tanya-jawab berbasis konteks dokumen dengan sitasi kemiripan (similarity score).
+  - Pilihan mode **RAG Vectorless** untuk alur dokumen berbasis file lokal tanpa database vektor eksternal.
+  - Sinkronisasi terpusat untuk konfigurasi provider LLM kustom (OpenAI, Gemini, Groq, DeepSeek, Ollama).
+  - Chatbot tanya-jawab berbasis konteks dokumen dengan sitasi kemiripan (similarity score) dan fitur bulk delete dokumen.
 - **🧠 Machine Learning Studio**:
   - Generic Model Runner (Scikit-Learn / Joblib / ONNX).
   - Formulir input dinamis otomatis berdasarkan skema fitur model.
   - Visualisasi probabilitas kelas dan confidence bar chart secara real-time.
+- **📈 Market Forecast (Fraktal Pattern)**:
+  - Dashboard `/grill-me` dengan analisis pola fraktal (180 candle historis + 30 candle proyeksi horizon) dan evaluasi prediksi vs aktual otomatis ke SQLite.
+  - **Pilihan Fleksibel MetaTrader 5 (MT5)**: Dilengkapi toggle "Gunakan MT5" di UI. Secara default MT5 bersifat opsional—jika dimatikan atau MT5 tidak dibuka, sistem otomatis menggunakan generator pergerakan candle multi-siklik & random walk realistis.
+  - Mekanisme **Graceful Auto-Fallback** dengan notifikasi informatif apabila koneksi ke MT5 terminal terputus atau gagal, mencegah error 503.
 - **🔐 Autentikasi & Keamanan**:
-  - Secure HTTP-Only Cookie Session untuk navigasi Web UI.
+  - Secure HTTP-Only Cookie Session untuk navigasi Web UI dengan branding EZ Template.
   - Manajemen **API Key** (`sk_live_...`) untuk memanggil endpoint REST API dari aplikasi eksternal / mobile / IoT.
   - Password hashing dengan `bcrypt` dan verifikasi token `JWT`.
 - **⚡ Frontend Reaktif Tanpa Node.js**:
@@ -48,12 +56,7 @@ Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi *
 - **🙂 Face Recognition Studio**:
   - Registrasi, pengenalan, daftar, dan penghapusan wajah melalui `/face` dan `/api/v1/face`.
 - **🗂️ Model Hub**:
-  - Kelola model lokal melalui `/models` dan gunakan metadata fitur dinamis untuk inferensi ML.
-- **📄 RAG Vectorless**:
-  - Alur dokumen berbasis file lokal melalui `/rag/vectorless`, termasuk upload/inspeksi PDF dan tanya-jawab.
-- **📈 Market Forecast**:
-  - Dashboard `/grill-me` dengan integrasi MetaTrader 5 dan history forecast SQLite.
-  - Memerlukan paket MetaTrader5 serta terminal MT5 yang tersedia pada host untuk mengambil data pasar.
+  - Kelola model lokal melalui `/models`, dukung unggah model kustom / Teachable Machine, dan gunakan metadata fitur dinamis untuk inferensi ML.
 
 ---
 
@@ -102,7 +105,7 @@ BOILERPLATE/
 │   ├── core/                   # Konfigurasi Pydantic, Database async, dan Keamanan
 │   ├── models/                 # Model database SQLAlchemy (User, Document, MLModel)
 │   ├── schemas/                # Skema validasi Pydantic
-│   ├── services/               # Core AI logic (OpenCV, YOLO, RAG, Scikit-Learn)
+│   ├── services/               # Core AI logic (OpenCV, YOLO, RAG, Scikit-Learn, MT5)
 │   ├── static/                 # Static assets (webcam.js, main.js, css)
 │   ├── templates/              # Jinja2 HTML templates + HTMX partials
 │   └── web/                    # Monolith web controllers (HTML & HTMX views)
@@ -290,6 +293,34 @@ curl -X POST "http://localhost:8000/api/v1/ml/predict/iris_classifier" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{"features": {"sepal_length": 5.8, "sepal_width": 2.7, "petal_length": 5.1, "petal_width": 1.9}}'
 ```
+
+---
+
+## 📝 Changelog
+
+### [2026-10-04] - Pembaruan Fitur & Peningkatan Stabilitas
+
+#### 📈 Market Forecast (`/grill-me`)
+- **Opsi Toggle MT5 (Opsional)**: Menambahkan checkbox "Gunakan MT5" pada dashboard Market Forecast (default nonaktif). Pengguna dapat menggunakan seluruh fitur tanpa harus membuka atau memasang MetaTrader 5.
+- **Simulasi Candle Realistis**: Implementasi generator pergerakan harga berbasis *multi-frequency cycle wave* + *random walk* yang menghasilkan 500 candle konsisten untuk pemindaian pola fraktal (180 candle historis & 30 candle proyeksi horizon), grafik visualisasi, dan pencatatan riwayat prediksi otomatis ke SQLite.
+- **Graceful Auto-Fallback**: Jika opsi MT5 diaktifkan tetapi koneksi terminal gagal atau market tidak ditemukan, sistem otomatis beralih ke simulasi dengan pemberitahuan alert di UI tanpa memunculkan error 503.
+- **Background Monitor Asinkron**: Pemantauan evaluasi riwayat prediksi candle berjalan di latar belakang tanpa memblokir lock terminal.
+
+#### 👁️ Computer Vision & Teachable Machine (`/cv`)
+- **Dukungan Model Teachable Machine**: Integrasi model klasifikasi citra dan MediaPipe Pose landmark yang diekspor dari Teachable Machine.
+- **Layout Tampilan Baru**: Menata posisi live prediction agar tampil rapi langsung di bawah video preview webcam.
+- **Pembersihan Visualisasi MediaPipe**: Menghilangkan garis penghubung landmark yang mengganggu pada area wajah (hanya menyisakan titik-titik pose tubuh utama).
+- **Stabilisasi Prediksi**: Menerapkan Exponential Moving Average (EMA, `alpha = 0.15`) dan mekanisme *hysteresis state lock* (debounce 4 frame / delta ambang 15%) sehingga label prediksi tidak melompat-lompat saat subjek diam.
+
+#### 📚 Knowledge Base & RAG (`/rag`)
+- **Sinkronisasi Provider LLM**: Pengaturan provider kustom (`API Key`, `Model`, `Base URL`) tersinkronisasi otomatis antara mode RAG Vectorless dan RAG pgvector.
+- **Manajemen Dokumen**: Dukungan bulk delete dokumen dan pemisahan navigasi daftar dokumen.
+- **Automated Tests**: Penambahan pengujian unit untuk validasi shared provider (`tests/test_rag_provider.py`).
+
+#### 🗂️ Model Hub & Template UI
+- **Pembaruan Model Hub (`/models`)**: Dukungan upload dan registrasi paket model Teachable Machine dan ONNX kustom.
+- **Penyempurnaan Tampilan**: Pembaruan tema login dan navigasi sidebar "EZ Template".
+- **Git Ignore**: Pembaruan `.gitignore` untuk mengabaikan artefak folder model upload dinamis di `weights/`.
 
 ---
 

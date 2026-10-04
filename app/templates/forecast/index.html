@@ -4,48 +4,225 @@
 <main class="p-4 md:p-8 max-w-7xl mx-auto w-full" x-data="forecastPage()" x-init="load(); timer = setInterval(() => load(), 5000)">
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-7">
         <div>
-            <p class="text-xs font-bold uppercase tracking-[.18em] text-indigo-600">GRILL ME</p>
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-bold uppercase tracking-[.18em] text-indigo-600">GRILL ME</p>
+                <template x-if="data">
+                    <span class="badge badge-sm font-medium"
+                          :class="data.source === 'mt5' ? 'badge-success text-white' : 'badge-ghost text-slate-600'"
+                          x-text="data.source === 'mt5' ? '● MT5 Terhubung' : '○ ' + (data.source_label || 'Simulasi')">
+                    </span>
+                </template>
+            </div>
             <h1 class="text-3xl font-black text-slate-900 mt-1">Market Forecast</h1>
-            <p class="text-sm text-slate-500 mt-2">Pencarian pola fraktal dari data candle MetaTrader 5.</p>
+            <p class="text-sm text-slate-500 mt-2">Pencarian pola fraktal dari data candle MetaTrader 5 atau simulasi pasar.</p>
         </div>
-        <div class="flex flex-wrap items-end gap-2">
-            <label class="text-xs font-semibold text-slate-500">Market<input x-model="symbol" @change="load()" class="input input-bordered input-sm block mt-1 w-32" placeholder="BTCUSD"></label>
-            <label class="text-xs font-semibold text-slate-500">Timeframe<select x-model="timeframe" @change="load()" class="select select-bordered select-sm block mt-1 w-28">{% for tf in timeframes %}<option>{{ tf }}</option>{% endfor %}</select></label>
-            <button @click="load()" class="btn btn-primary btn-sm"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh</button>
+        <div class="flex flex-wrap items-end gap-3">
+            <label class="text-xs font-semibold text-slate-500">
+                Market
+                <input x-model="symbol" @change="load()" class="input input-bordered input-sm block mt-1 w-28" placeholder="BTCUSD">
+            </label>
+            <label class="text-xs font-semibold text-slate-500">
+                Timeframe
+                <select x-model="timeframe" @change="load()" class="select select-bordered select-sm block mt-1 w-24">
+                    {% for tf in timeframes %}
+                    <option>{{ tf }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <div class="flex flex-col">
+                <span class="text-xs font-semibold text-slate-500">Sumber Data</span>
+                <label class="label cursor-pointer gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1 mt-1 shadow-sm h-8 select-none hover:bg-slate-50">
+                    <input type="checkbox" x-model="useMt5" @change="load()" class="checkbox checkbox-primary checkbox-xs rounded" />
+                    <span class="text-xs font-semibold" :class="useMt5 ? 'text-indigo-600' : 'text-slate-600'">Gunakan MT5</span>
+                </label>
+            </div>
+            <button @click="load()" class="btn btn-primary btn-sm h-8">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
         </div>
     </div>
 
-    <div x-show="error" class="alert alert-warning mb-5 text-sm"><i data-lucide="plug-zap" class="w-5 h-5"></i><span x-text="error"></span></div>
-    <div x-show="loading" class="text-sm text-slate-500 mb-4">Mengambil candle terbaru dari MT5...</div>
+    <!-- Alert jika MT5 dipilih tapi tidak aktif (fallback ke simulasi) -->
+    <template x-if="data && data.mt5_notice">
+        <div class="alert alert-warning mb-5 text-sm py-2.5 px-4 shadow-sm flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+                <span x-text="data.mt5_notice"></span>
+            </div>
+            <span class="text-xs opacity-75 font-mono">Auto-fallback aktif</span>
+        </div>
+    </template>
+
+    <div x-show="error" class="alert alert-error mb-5 text-sm">
+        <i data-lucide="plug-zap" class="w-5 h-5"></i>
+        <span x-text="error"></span>
+    </div>
+
+    <div x-show="loading" class="text-sm text-slate-500 mb-4" x-text="useMt5 ? 'Menghubungi MT5 dan mengambil candle terbaru...' : 'Mengalkulasi proyeksi pola candle...'"></div>
 
     <template x-if="data">
         <div>
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Harga terakhir</p><p class="text-2xl font-black mt-2" x-text="data.live_price ?? data.current_price"></p><p class="text-xs text-slate-500 mt-1" x-text="data.symbol + ' · ' + data.timeframe"></p></div>
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Proyeksi horizon 30 candle</p><p class="text-2xl font-black mt-2" x-text="data.projected_price"></p><p class="text-xs mt-1" :class="data.change_percent >= 0 ? 'text-emerald-600' : 'text-rose-600'" x-text="(data.change_percent >= 0 ? '+' : '') + data.change_percent + '%' "></p></div>
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Arah pola</p><p class="text-2xl font-black mt-2" :class="data.direction === 'Bullish' ? 'text-emerald-600' : 'text-rose-600'" x-text="data.direction"></p><p class="text-xs text-slate-500 mt-1" x-text="'Error pola: ' + data.pattern_error"></p></div>
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Candle terakhir</p><p class="text-sm font-bold mt-3" x-text="new Date(data.last_bar_time).toLocaleString('id-ID')"></p><p class="text-xs text-emerald-600 mt-1">Update setiap 5 detik</p></div>
-                <div class="rounded-2xl bg-white border border-slate-200 p-5"><p class="text-xs text-slate-400">Akurasi arah</p><p class="text-2xl font-black mt-2" x-text="data.history.direction_accuracy === null ? '—' : data.history.direction_accuracy + '%' "></p><p class="text-xs text-slate-500 mt-1" x-text="data.history.completed + ' prediksi selesai'"></p></div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5">
+                    <p class="text-xs text-slate-400">Harga terakhir</p>
+                    <p class="text-2xl font-black mt-2" x-text="data.live_price ?? data.current_price"></p>
+                    <p class="text-xs text-slate-500 mt-1" x-text="data.symbol + ' · ' + data.timeframe"></p>
+                </div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5">
+                    <p class="text-xs text-slate-400">Proyeksi horizon 30 candle</p>
+                    <p class="text-2xl font-black mt-2" x-text="data.projected_price"></p>
+                    <p class="text-xs mt-1" :class="data.change_percent >= 0 ? 'text-emerald-600' : 'text-rose-600'" x-text="(data.change_percent >= 0 ? '+' : '') + data.change_percent + '%' "></p>
+                </div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5">
+                    <p class="text-xs text-slate-400">Arah pola</p>
+                    <p class="text-2xl font-black mt-2" :class="data.direction === 'Bullish' ? 'text-emerald-600' : 'text-rose-600'" x-text="data.direction"></p>
+                    <p class="text-xs text-slate-500 mt-1" x-text="'Error pola: ' + data.pattern_error"></p>
+                </div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5">
+                    <p class="text-xs text-slate-400">Candle terakhir</p>
+                    <p class="text-sm font-bold mt-3" x-text="new Date(data.last_bar_time).toLocaleString('id-ID')"></p>
+                    <p class="text-xs text-emerald-600 mt-1">Update setiap 5 detik</p>
+                </div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-5">
+                    <p class="text-xs text-slate-400">Akurasi arah</p>
+                    <p class="text-2xl font-black mt-2" x-text="data.history.direction_accuracy === null ? '—' : data.history.direction_accuracy + '%' "></p>
+                    <p class="text-xs text-slate-500 mt-1" x-text="data.history.completed + ' prediksi selesai'"></p>
+                </div>
             </div>
+
             <div class="rounded-2xl bg-white border border-slate-200 p-5">
-                <div class="flex justify-between items-center mb-3"><h2 class="font-bold text-slate-900">Pola harga & proyeksi</h2><span class="badge badge-ghost">180 candle + 30 proyeksi</span></div>
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-2">
+                        <h2 class="font-bold text-slate-900">Pola harga & proyeksi</h2>
+                        <span class="badge badge-sm" :class="data.source === 'mt5' ? 'badge-primary' : 'badge-ghost'" x-text="data.source_label"></span>
+                    </div>
+                    <span class="badge badge-ghost text-xs">180 candle + 30 proyeksi</span>
+                </div>
                 <div class="h-80"><canvas id="forecast-chart"></canvas></div>
             </div>
+
             <div class="rounded-2xl bg-white border border-slate-200 p-5 mt-5">
                 <h2 class="font-bold text-slate-900">History prediksi vs aktual</h2>
                 <p class="text-xs text-slate-500 mt-1">Prediksi dikunci setelah candle selesai dan dinilai setelah 30 candle berikutnya selesai. History tetap dicatat selama server berjalan.</p>
                 <p class="text-sm mt-3" x-text="data.history.average_error_percent === null ? 'Menunggu hasil aktual' : 'Rata-rata error harga: ' + data.history.average_error_percent + '%' "></p>
-                <div class="overflow-x-auto mt-3"><table class="table table-sm"><thead><tr><th>Waktu candle</th><th>Harga awal</th><th>Prediksi</th><th>Target evaluasi</th><th>Aktual</th><th>Hasil arah</th><th>Error harga</th></tr></thead><tbody><template x-for="item in data.history.items" :key="item.key"><tr><td x-text="new Date(item.anchor_timestamp * 1000).toLocaleString('id-ID')"></td><td x-text="item.anchor_price"></td><td x-text="item.predicted_price"></td><td x-text="new Date(item.target_timestamp * 1000).toLocaleString('id-ID')"></td><td x-text="item.actual_price ?? 'Menunggu candle ke-30'"></td><td x-text="item.status === 'completed' ? (item.direction_correct ? 'Benar' : 'Salah') : 'Pending'"></td><td x-text="item.error_percent == null ? 'Belum tersedia' : item.error_percent + '%' "></td></tr></template></tbody></table></div>
+                <div class="overflow-x-auto mt-3">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Waktu candle</th>
+                                <th>Harga awal</th>
+                                <th>Prediksi</th>
+                                <th>Target evaluasi</th>
+                                <th>Aktual</th>
+                                <th>Hasil arah</th>
+                                <th>Error harga</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in data.history.items" :key="item.key">
+                                <tr>
+                                    <td x-text="new Date(item.anchor_timestamp * 1000).toLocaleString('id-ID')"></td>
+                                    <td x-text="item.anchor_price"></td>
+                                    <td x-text="item.predicted_price"></td>
+                                    <td x-text="new Date(item.target_timestamp * 1000).toLocaleString('id-ID')"></td>
+                                    <td x-text="item.actual_price ?? 'Menunggu candle ke-30'"></td>
+                                    <td x-text="item.status === 'completed' ? (item.direction_correct ? 'Benar' : 'Salah') : 'Pending'"></td>
+                                    <td x-text="item.error_percent == null ? 'Belum tersedia' : item.error_percent + '%' "></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </template>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-function forecastPage() { return {
-    symbol: 'BTCUSD', timeframe: 'M1', data: null, error: '', loading: false, chart: null, timer: null, destroy() { clearInterval(this.timer); if(this.chart) this.chart.destroy(); },
-    async load() { if (this.loading) return; const requestedSymbol = this.symbol; const requestedTimeframe = this.timeframe; this.loading = true; this.error = ''; try { const res = await fetch(`/grill-me/data?symbol=${encodeURIComponent(this.symbol)}&timeframe=${this.timeframe}`); const body = await res.json(); if (!body.ok) throw new Error(body.error); if (requestedSymbol !== this.symbol || requestedTimeframe !== this.timeframe) return; const changed = !this.data || this.data.last_bar_time !== body.data.last_bar_time || this.data.symbol !== body.data.symbol || this.data.timeframe !== body.data.timeframe; this.data = body.data; if (changed || !this.chart) this.$nextTick(() => this.draw()); } catch (e) { this.error = e.message; } finally { this.loading = false; } },
-    draw() { const el = document.getElementById('forecast-chart'); if (!el || !this.data || typeof Chart === 'undefined') return; if (this.chart) this.chart.destroy(); const current = this.data.current.map(Number); const projection = this.data.projection.map(Number); const labels = [...current.map((_, i) => i + 1), ...projection.map((_, i) => current.length + i + 1)]; this.chart = new Chart(el, { type: 'line', data: { labels, datasets: [{ label: 'Harga aktual', data: [...current, ...Array(projection.length).fill(null)], borderColor: '#4f46e5', backgroundColor: '#4f46e5', borderWidth: 2, pointRadius: 0, spanGaps: false, tension: .2 }, { label: 'Proyeksi fraktal', data: [...Array(current.length - 1).fill(null), current.at(-1), ...projection], borderColor: '#ef4444', backgroundColor: '#ef4444', borderWidth: 2, borderDash: [6, 5], pointRadius: 0, spanGaps: false, tension: .2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { intersect: false, mode: 'index' }, scales: { x: { display: false }, y: { grid: { color: '#e2e8f0' } } } } }); }
-}; }
+function forecastPage() {
+    return {
+        symbol: 'BTCUSD',
+        timeframe: 'M1',
+        useMt5: false,
+        data: null,
+        error: '',
+        loading: false,
+        chart: null,
+        timer: null,
+        destroy() {
+            clearInterval(this.timer);
+            if (this.chart) this.chart.destroy();
+        },
+        async load() {
+            if (this.loading) return;
+            const requestedSymbol = this.symbol;
+            const requestedTimeframe = this.timeframe;
+            const requestedMt5 = this.useMt5;
+            this.loading = true;
+            this.error = '';
+            try {
+                const res = await fetch(`/grill-me/data?symbol=${encodeURIComponent(this.symbol)}&timeframe=${this.timeframe}&use_mt5=${this.useMt5}`);
+                const body = await res.json();
+                if (!body.ok) throw new Error(body.error);
+                if (requestedSymbol !== this.symbol || requestedTimeframe !== this.timeframe || requestedMt5 !== this.useMt5) return;
+                const changed = !this.data || this.data.last_bar_time !== body.data.last_bar_time || this.data.symbol !== body.data.symbol || this.data.timeframe !== body.data.timeframe || this.data.source !== body.data.source;
+                this.data = body.data;
+                if (changed || !this.chart) this.$nextTick(() => this.draw());
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+                this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+            }
+        },
+        draw() {
+            const el = document.getElementById('forecast-chart');
+            if (!el || !this.data || typeof Chart === 'undefined') return;
+            if (this.chart) this.chart.destroy();
+            const current = this.data.current.map(Number);
+            const projection = this.data.projection.map(Number);
+            const labels = [...current.map((_, i) => i + 1), ...projection.map((_, i) => current.length + i + 1)];
+            this.chart = new Chart(el, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: this.data.source === 'mt5' ? 'Harga aktual MT5' : 'Harga candle',
+                            data: [...current, ...Array(projection.length).fill(null)],
+                            borderColor: '#4f46e5',
+                            backgroundColor: '#4f46e5',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            spanGaps: false,
+                            tension: .2
+                        },
+                        {
+                            label: 'Proyeksi fraktal (30 candle)',
+                            data: [...Array(current.length - 1).fill(null), current.at(-1), ...projection],
+                            borderColor: '#ef4444',
+                            backgroundColor: '#ef4444',
+                            borderWidth: 2,
+                            borderDash: [6, 5],
+                            pointRadius: 0,
+                            spanGaps: false,
+                            tension: .2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    scales: {
+                        x: { display: false },
+                        y: { grid: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+        }
+    };
+}
 </script>
 {% endblock %}

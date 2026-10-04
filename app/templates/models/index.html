@@ -11,7 +11,7 @@
                 <i data-lucide="box" class="w-7 h-7 text-indigo-600"></i> Model Hub (Upload & Kelola)
             </h1>
             <p class="text-sm text-slate-500">
-                Pusat manajemen dan upload model <strong>Computer Vision</strong> (.pt, .onnx) dan <strong>Machine Learning</strong> (.pkl, .joblib, .onnx).
+                Pusat manajemen model Computer Vision, termasuk export <strong>Google Teachable Machine</strong> (TensorFlow.js).
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -51,8 +51,8 @@
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Framework Didukung</span>
-                <h3 class="text-2xl font-bold text-slate-800 mt-1">4 Format</h3>
-                <p class="text-xs text-slate-500 mt-0.5">PyTorch, ONNX, Pickle, Joblib</p>
+                <h3 class="text-2xl font-bold text-slate-800 mt-1">5 Format</h3>
+                <p class="text-xs text-slate-500 mt-0.5">PyTorch, ONNX, TF.js, Pickle</p>
             </div>
             <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                 <i data-lucide="layers" class="w-6 h-6"></i>
@@ -82,7 +82,7 @@
                     <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
                         <tr>
                             <th class="py-3 px-4">Nama Model</th>
-                            <th class="py-3 px-4">Framework</th>
+                            <th class="py-3 px-4 min-w-[155px]">Framework</th>
                             <th class="py-3 px-4">File Path</th>
                             <th class="py-3 px-4">Deskripsi</th>
                             <th class="py-3 px-4 text-right">Aksi</th>
@@ -98,8 +98,8 @@
                                 </div>
                                 <span class="text-xs text-slate-400">Built-in / Auto Download</span>
                             </td>
-                            <td class="py-3 px-4">
-                                <span class="badge badge-sm badge-info">PyTorch / ONNX</span>
+                            <td class="py-3 px-4 min-w-[155px]">
+                                <span class="badge badge-sm badge-info whitespace-nowrap inline-flex">PyTorch / ONNX</span>
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500">weights/yolov8n.pt</td>
                             <td class="py-3 px-4 text-xs text-slate-500">Model object detection 80 kelas COCO dataset</td>
@@ -116,8 +116,8 @@
                                 </div>
                                 <span class="text-xs text-slate-400">Built-in OpenCV</span>
                             </td>
-                            <td class="py-3 px-4">
-                                <span class="badge badge-sm badge-success">OpenCV XML</span>
+                            <td class="py-3 px-4 min-w-[155px]">
+                                <span class="badge badge-sm badge-success whitespace-nowrap inline-flex">OpenCV XML</span>
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500">cv2.haarcascades</td>
                             <td class="py-3 px-4 text-xs text-slate-500">Deteksi wajah instan tanpa file eksternal</td>
@@ -135,8 +135,8 @@
                                 </div>
                                 <span class="text-xs text-slate-400 font-mono">{{ m.name }}</span>
                             </td>
-                            <td class="py-3 px-4">
-                                <span class="badge badge-sm badge-secondary">{{ m.framework }}</span>
+                            <td class="py-3 px-4 min-w-[155px]">
+                                <span class="badge badge-sm badge-secondary whitespace-nowrap inline-flex max-w-full truncate" title="{{ m.framework }}">{{ m.framework }}</span>
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-xs">{{ m.file_path }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500">{{ m.description or '-' }}</td>
@@ -171,7 +171,7 @@
                     <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
                         <tr>
                             <th class="py-3 px-4">Nama Model</th>
-                            <th class="py-3 px-4">Framework</th>
+                            <th class="py-3 px-4 min-w-[155px]">Framework</th>
                             <th class="py-3 px-4">Tipe Tugas</th>
                             <th class="py-3 px-4">File Path</th>
                             <th class="py-3 px-4 text-right">Aksi</th>
@@ -187,8 +187,8 @@
                                 </div>
                                 <span class="text-xs text-slate-400 font-mono">{{ m.name }}</span>
                             </td>
-                            <td class="py-3 px-4">
-                                <span class="badge badge-sm badge-outline border-slate-300 text-slate-700">{{ m.framework }}</span>
+                            <td class="py-3 px-4 min-w-[155px]">
+                                <span class="badge badge-sm badge-outline border-slate-300 text-slate-700 whitespace-nowrap inline-flex max-w-full truncate" title="{{ m.framework }}">{{ m.framework }}</span>
                             </td>
                             <td class="py-3 px-4">
                                 <span class="badge badge-sm badge-info">{{ m.task_type }}</span>
@@ -245,8 +245,9 @@
                   class="space-y-4 mt-4 text-left">
                 
                 <div class="form-control">
-                    <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Pilih File Model (*.pt, *.onnx, *.pkl, *.joblib)</span></label>
-                    <input type="file" name="file" required class="file-input file-input-bordered file-input-primary file-input-sm w-full" />
+                    <label class="label pb-1"><span class="label-text font-medium text-xs text-slate-700">Pilih File Model</span></label>
+                    <input type="file" name="file" accept=".pt,.onnx,.pkl,.joblib,.zip" required class="file-input file-input-bordered file-input-primary file-input-sm w-full" />
+                    <span class="text-[11px] text-slate-400 mt-1">Teachable Machine: pilih ZIP export yang berisi model.json, metadata.json, dan weights.bin.</span>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -263,6 +264,7 @@
                         <select name="framework" required class="select select-bordered select-sm w-full">
                             <option value="pytorch_yolo">PyTorch YOLO (.pt)</option>
                             <option value="onnx">ONNX Runtime (.onnx)</option>
+                            <option value="teachable_machine">Google Teachable Machine (TF.js .zip)</option>
                             <option value="scikit-learn">Scikit-Learn (.pkl / .joblib)</option>
                             <option value="pickle">Generic Python Pickle</option>
                         </select>

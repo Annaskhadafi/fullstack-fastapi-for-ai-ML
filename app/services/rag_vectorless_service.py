@@ -6,34 +6,9 @@ from io import BytesIO
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from app.core.config import settings
-from app.services.rag_service import get_openai_client
-from openai import AsyncOpenAI
+from app.services.rag_service import get_chat_client, provider_settings, update_provider
 
 STORE = os.path.join("data", "documents", "vectorless_registry.json")
-_provider = {"api_key": None, "model": None, "base_url": None}
-
-
-def provider_settings() -> Dict[str, Any]:
-    return {
-        "configured": bool(_provider["api_key"] or settings.OPENAI_API_KEY),
-        "model": _provider["model"] or settings.OPENAI_MODEL,
-        "base_url": _provider["base_url"] or settings.OPENAI_BASE_URL or "https://api.openai.com/v1",
-    }
-
-
-def update_provider(api_key: str, model: str, base_url: str) -> Dict[str, Any]:
-    _provider.update({"api_key": api_key.strip() or None, "model": model.strip() or None, "base_url": base_url.strip().rstrip("/") or None})
-    return provider_settings()
-
-
-def _client():
-    if _provider["api_key"]:
-        kwargs = {"api_key": _provider["api_key"]}
-        if _provider["base_url"]:
-            kwargs["base_url"] = _provider["base_url"]
-        return AsyncOpenAI(**kwargs)
-    return get_openai_client()
 
 
 def _load() -> List[Dict[str, Any]]:
@@ -122,7 +97,7 @@ async def answer(query: str, top_k: int = 5) -> Dict[str, Any]:
     context = "\n\n".join(f"[{item['title']}]\n{item['content']}" for item in matches)
     text = ""
     model = "Lexical Context (Vectorless)"
-    client = _client()
+    client = get_chat_client()
     if client and context:
         try:
             response = await client.chat.completions.create(

@@ -155,6 +155,8 @@ def apply_opencv_filter(
 
     elif filter_type == "face_detect":
         # Built-in OpenCV Haar Cascade face detector
+        if not hasattr(cv2, "CascadeClassifier"):
+            raise RuntimeError("OpenCV pada environment ini tidak menyediakan Haar Cascade; gunakan model Teachable Machine atau YOLO.")
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         face_cascade = cv2.CascadeClassifier(cascade_path)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -323,6 +325,9 @@ def run_yolo_detection(
         )
 
     # 3. Built-in OpenCV Haar Cascade Fallback (Guaranteed to work 100% without any model downloads)
+    if not hasattr(cv2, "CascadeClassifier"):
+        elapsed_ms = (time.time() - start_time) * 1000
+        return DetectionResult(success=True, total_detected=0, classes_summary={}, boxes=[], execution_time_ms=round(elapsed_ms, 2), annotated_image_base64=encode_image_to_base64(annotated), original_dimensions={"width": orig_w, "height": orig_h})
     cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     face_cascade = cv2.CascadeClassifier(cascade_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

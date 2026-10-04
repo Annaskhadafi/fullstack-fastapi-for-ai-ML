@@ -22,6 +22,16 @@ class WebcamController {
             });
             this.video.srcObject = this.stream;
             await this.video.play();
+            if (this.video.videoWidth > 0) {
+                this.video.width = this.video.videoWidth;
+                this.video.height = this.video.videoHeight;
+            }
+            this.video.onloadedmetadata = () => {
+                if (this.video.videoWidth > 0) {
+                    this.video.width = this.video.videoWidth;
+                    this.video.height = this.video.videoHeight;
+                }
+            };
             return true;
         } catch (err) {
             console.error("Camera access error:", err);

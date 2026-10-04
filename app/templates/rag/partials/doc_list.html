@@ -1,31 +1,28 @@
 {% if success_message %}
-<div class="alert alert-success text-xs py-2.5 mb-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl shadow-xs">
+<div class="alert alert-success text-xs py-2.5 mb-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl shadow-xs">
     <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
     <span class="font-medium">{{ success_message }}</span>
 </div>
 {% endif %}
 
-<div class="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+<div class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
     {% for doc in docs %}
-    <div class="p-3.5 bg-white hover:bg-slate-50/80 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all text-xs space-y-2 shadow-xs group">
-        <div class="flex items-center justify-between gap-2">
-            <span class="font-bold text-slate-900 text-xs truncate max-w-[210px] group-hover:text-indigo-600 transition-colors" title="{{ doc.title }}">
-                {{ doc.title }}
-            </span>
-            <span class="badge badge-xs bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono font-bold px-1.5 py-0.5">
-                #{{ doc.id[:6] }}
-            </span>
+    <article x-show="!query || $el.dataset.docSearch.toLowerCase().includes(query.toLowerCase())" data-doc-search="{{ doc.title }}" class="group p-4 bg-white hover:bg-slate-50/80 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-colors text-xs shadow-xs">
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3 min-w-0">
+                <span class="w-10 h-10 shrink-0 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i data-lucide="file-text" class="w-5 h-5"></i></span>
+                <div class="min-w-0"><h3 class="font-bold text-slate-900 truncate group-hover:text-indigo-600 transition-colors" title="{{ doc.title }}">{{ doc.title }}</h3><p class="text-[11px] text-slate-500 mt-1">{{ doc.content|length }} karakter · 768 dimensi</p></div>
+            </div>
+            <span class="badge badge-sm bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Ready</span>
         </div>
-
-        <p class="text-slate-600 text-[11px] line-clamp-2 leading-relaxed font-normal bg-slate-50 p-2 rounded-lg border border-slate-100">
-            {{ doc.content }}
-        </p>
-
-        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 font-medium">
-            <span class="inline-flex items-center gap-1 text-slate-600 font-semibold">
-                <i data-lucide="binary" class="w-3 h-3 text-indigo-600"></i> Vector: 768 dim
-            </span>
-            <span class="font-mono text-slate-500">
+        <p class="text-slate-600 text-xs line-clamp-2 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 mt-3">{{ doc.content }}</p>
+        <div class="flex items-center justify-end gap-2 mt-3">
+            <button type="button" class="btn btn-ghost btn-xs text-slate-600 gap-1.5" data-title="{{ doc.title|e }}" data-content="{{ doc.content|e }}" data-created="{{ doc.created_at }}" onclick="showRagDocument(this)"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Lihat</button>
+            <button type="button" class="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-50 gap-1.5" hx-delete="/rag/documents/{{ doc.id }}" hx-target="#doc-list-container" hx-swap="innerHTML" hx-confirm="Hapus dokumen ini dari knowledge base?"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus</button>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-400 pt-3 mt-3 border-t border-slate-100 font-medium">
+            <span class="inline-flex items-center gap-1"><i data-lucide="database" class="w-3.5 h-3.5 text-indigo-500"></i> pgvector index</span>
+            <span>
                 {% if doc.created_at is string %}
                     {{ doc.created_at[:16] }}
                 {% elif doc.created_at.strftime %}
@@ -35,12 +32,12 @@
                 {% endif %}
             </span>
         </div>
-    </div>
+    </article>
     {% else %}
     <div class="text-center py-12 text-slate-400 space-y-2 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
         <i data-lucide="inbox" class="w-8 h-8 mx-auto text-slate-300"></i>
         <p class="text-xs font-semibold text-slate-600">Belum ada dokumen yang diindeks</p>
-        <p class="text-[11px] text-slate-400 max-w-xs mx-auto">Klik tombol <strong>"Tambah Dokumen"</strong> di atas untuk mengunggah pengetahuan pertama Anda.</p>
+        <p class="text-[11px] text-slate-400 max-w-xs mx-auto">Klik <strong>Tambah dokumen</strong> untuk mengunggah sumber pengetahuan pertama.</p>
     </div>
     {% endfor %}
 </div>

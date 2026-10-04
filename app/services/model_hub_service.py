@@ -2,6 +2,8 @@ import os
 import json
 import uuid
 import shutil
+import zipfile
+from io import BytesIO
 import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -36,6 +38,20 @@ class UnifiedModelItem:
 def get_registry_path() -> str:
     os.makedirs(settings.WEIGHTS_DIR, exist_ok=True)
     return os.path.join(settings.WEIGHTS_DIR, REGISTRY_FILENAME)
+
+
+def resolve_teachable_asset(model_name: str, asset_path: str) -> Optional[str]:
+    for item in load_local_registry():
+        if item.get("name") != model_name and item.get("id") != model_name:
+            continue
+        if item.get("framework") != "teachable_machine":
+            return None
+        model_json = os.path.realpath(item.get("file_path", ""))
+        root = os.path.realpath(os.path.dirname(model_json))
+        target = os.path.realpath(os.path.join(root, asset_path))
+        if target.startswith(root + os.sep) and os.path.isfile(target):
+            return target
+    return None
 
 
 def load_local_registry() -> List[Dict[str, Any]]:
@@ -210,9 +226,33 @@ async def save_uploaded_model(
     final_filename = f"{unique_name}{ext}"
     dest_path = os.path.join(settings.WEIGHTS_DIR, final_filename)
 
-    # 1. Save file locally
-    with open(dest_path, "wb") as f:
-        f.write(file_bytes)
+    # 1. Save file locally. Teachable Machine exports a TF.js bundle as ZIP.
+    if framework == "teachable_machine" and ext == ".zip":
+        bundle_dir = os.path.join(settings.WEIGHTS_DIR, unique_name)
+        os.makedirs(bundle_dir, exist_ok=True)
+        with zipfile.ZipFile(BytesIO(file_bytes)) as archive:
+            root_dir = os.path.realpath(bundle_dir)
+            for member in archive.infolist():
+                target = os.path.realpath(os.path.join(bundle_dir, member.filename))
+                if not target.startswith(root_dir + os.sep):
+                    raise ValueError("Arsip Teachable Machine memiliki path tidak aman.")
+                if member.is_dir():
+                    os.makedirs(target, exist_ok=True)
+                else:
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with archive.open(member) as source, open(target, "wb") as destination:
+                        shutil.copyfileobj(source, destination)
+        model_json = next((os.path.join(root, "model.json") for root, _, files in os.walk(bundle_dir) if "model.json" in files), None)
+        bundle_root = os.path.dirname(model_json) if model_json else None
+        required_assets = {"model.json", "metadata.json", "weights.bin"}
+        available_assets = set(os.listdir(bundle_root)) if bundle_root else set()
+        if not model_json or not required_assets.issubset(available_assets):
+            shutil.rmtree(bundle_dir, ignore_errors=True)
+            raise ValueError("ZIP harus berisi model.json, metadata.json, dan weights.bin dari Teachable Machine.")
+        dest_path = model_json
+    else:
+        with open(dest_path, "wb") as f:
+            f.write(file_bytes)
     
     logger.info(f"Model file saved locally to {dest_path}")
 
@@ -333,7 +373,12 @@ async def delete_model_unified(
     # 4. Remove physical file
     if file_to_delete and os.path.exists(file_to_delete):
         try:
-            os.remove(file_to_delete)
+            if os.path.basename(file_to_delete) == "model.json":
+                shutil.rmtree(os.path.dirname(file_to_delete), ignore_errors=True)
+            elif os.path.isdir(file_to_delete):
+                shutil.rmtree(file_to_delete)
+            else:
+                os.remove(file_to_delete)
             logger.info(f"Removed physical file: {file_to_delete}")
             return True
         except Exception as e:
