@@ -57,6 +57,38 @@ Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi *
 
 ---
 
+## 🖼️ Tampilan Aplikasi
+
+Beberapa halaman utama yang tersedia setelah server dijalankan:
+
+### Computer Vision Studio
+
+![Computer Vision Studio](docs/screenshots/computer-vision.png)
+
+### Face Recognition & Anti-Spoofing
+
+![Face Recognition Studio](docs/screenshots/face-recognition.png)
+
+### Knowledge Base & pgvector RAG
+
+![Knowledge Base & pgvector RAG](docs/screenshots/rag.png)
+
+### Model Hub — Daftar Model Computer Vision
+
+![Model Hub Computer Vision](docs/screenshots/model-hub.png)
+
+### Model Hub — Daftar Model Machine Learning
+
+![Model Hub Machine Learning](docs/screenshots/model-hub-ml.png)
+
+### Model Hub — Upload dan Registrasi Model
+
+![Model Hub Upload Model](docs/screenshots/model-hub-upload.png)
+
+> Screenshot diambil dari aplikasi lokal yang berjalan pada `http://localhost:8000`. Data pada gambar adalah data demo/runtime lokal.
+
+---
+
 ## 🏗️ Struktur Direktori
 
 ```text
