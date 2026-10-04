@@ -1,133 +1,261 @@
-# FastAPI AI Monolith Boilerplate
+# 🚀 Python AI Monolith Boilerplate
 
-Boilerplate Python monolith untuk aplikasi AI berbasis FastAPI, Jinja2 + HTMX, Computer Vision, RAG, Machine Learning, autentikasi, dan object storage S3/R2.
+Boilerplate **100% Python Monolith** modern, cepat, dan modular untuk aplikasi **Computer Vision (OpenCV + YOLO)**, **RAG (PostgreSQL Neon DB + pgvector)**, dan **Machine Learning (Scikit-Learn/ONNX)** dengan antarmuka interaktif **Jinja2 + HTMX + Tailwind CSS**.
 
-## Kemampuan
+> **💡 Mengapa Boilerplate ini Dibuat?**
+> Menjalankan pustaka native seperti OpenCV atau model deteksi objek langsung di lingkungan JavaScript / Node.js (Next.js) sering kali gagal akibat kendala library C++ sistem (`libGL.so`), batasan arsitektur platform, maupun ukuran bundle serverless yang membengkak.
+> Boilerplate ini menyatukan Frontend & Backend dalam **1 runtime Python yang konsisten**, ringan, stabil, dan siap di-deploy baik ke **Local**, **Docker**, maupun **Vercel Serverless**.
 
-- Computer Vision: OpenCV, filter gambar, face recognition, dan YOLOv8 ONNX pada /cv, /face, dan /api/v1/cv.
-- RAG: upload PDF/teks, embedding lokal atau provider OpenAI/Gemini, pgvector, dan fallback file lokal pada /rag dan /rag/vectorless.
-- Machine Learning: Model Hub Joblib/ONNX dan inferensi metadata fitur dinamis pada /models, /ml, dan /api/v1/ml.
-- Market Forecast: /grill-me, history SQLite, dan integrasi MetaTrader 5 bila tersedia.
-- Auth: HTTP-only cookie session, JWT, bcrypt, dan header X-API-Key.
-- Storage: filesystem lokal sebagai default, S3/R2/MinIO sebagai backend eksternal.
-- OpenAI-compatible API: /api/v1/chat/completions dan /api/v1/embeddings.
+---
 
-## Struktur
+## ✨ Fitur Utama
 
-    app/api/v1/       REST API
-    app/core/         settings, database, security
-    app/models/       SQLAlchemy models
-    app/schemas/      Pydantic schemas
-    app/services/     CV, RAG, ML, auth, storage, forecast
-    app/templates/    Jinja2 + HTMX
-    app/web/          HTML routes
-    migrations/       Alembic environment dan revision
-    weights/          model artifacts; file besar diabaikan Git
-    tests/            unittest
-    main.py           FastAPI app dan lifespan
-    run.py            local runner
+- **👁️ Computer Vision Studio**:
+  - Deteksi objek multi-kelas (80 kelas COCO) berbasis **YOLOv8 ONNX** yang sangat cepat & hemat memori.
+  - Dukungan pemrosesan **Unggah File Gambar** dan **Live Snapshot Kamera Webcam** via browser (`webcam.js`).
+  - Pipeline filter klasik **OpenCV Headless**: Canny Edge, Grayscale, Gaussian Blur, Contours, dan Deteksi Wajah (Haar Cascade).
+- **📚 pgvector RAG (Retrieval-Augmented Generation)**:
+  - Tersambung langsung ke database **PostgreSQL (Neon DB)** dengan ekstensi **pgvector** (tanpa perlu biaya ekstra untuk database vektor terpisah).
+  - Adapter modular embedding (Google Gemini `text-embedding-004`, OpenAI, atau local fallback).
+  - Chatbot tanya-jawab berbasis konteks dokumen dengan sitasi kemiripan (similarity score).
+- **🧠 Machine Learning Studio**:
+  - Generic Model Runner (Scikit-Learn / Joblib / ONNX).
+  - Formulir input dinamis otomatis berdasarkan skema fitur model.
+  - Visualisasi probabilitas kelas dan confidence bar chart secara real-time.
+- **🔐 Autentikasi & Keamanan**:
+  - Secure HTTP-Only Cookie Session untuk navigasi Web UI.
+  - Manajemen **API Key** (`sk_live_...`) untuk memanggil endpoint REST API dari aplikasi eksternal / mobile / IoT.
+  - Password hashing dengan `bcrypt` dan verifikasi token `JWT`.
+- **⚡ Frontend Reaktif Tanpa Node.js**:
+  - Ditenagai **FastAPI + Jinja2 + HTMX + Tailwind CSS + DaisyUI**.
+  - Interaksi SPA dinamis tanpa kompilasi webpack/vite atau kerumitan bridging Node.js.
+- **🪣 Object Storage Kompatibel S3 & Cloudflare R2**:
+  - Dukungan penyimpanan file/gambar ke **Cloudflare R2**, **AWS S3**, **MinIO**, atau fallback lokal otomatis.
+  - Zero egress fee dengan Cloudflare R2 untuk menghemat biaya hosting.
+- **🤖 OpenAI SDK Compatible & Multi-Provider LLM**:
+  - Ditenagai SDK resmi `openai`, mendukung OpenAI (`gpt-4o`), **Groq**, **DeepSeek**, **Cloudflare Workers AI**, dan **Ollama** lokal cukup dengan mengubah `OPENAI_BASE_URL`.
+  - Dilengkapi endpoint kompatibel OpenAI (`/api/v1/chat/completions` dan `/api/v1/embeddings`) sehingga server ini bisa dihubungkan ke Cursor, LangChain, atau LibreChat.
+- **☁️ Deployment Fleksibel (Vercel, Docker, & Cloudflare Pages)**:
+  - Siap di-deploy ke **Vercel Serverless** via `vercel.json` (teroptimasi di bawah batas 250MB).
+  - Kompatibel dengan **Cloudflare Pages** via reverse proxy functions (`cloudflare_pages/functions/api/[[path]].js`).
+  - Siap dijalankan dengan **Docker** & `docker-compose.yml`.
+  - Zero-config local fallback (otomatis menggunakan SQLite async jika belum ada koneksi PostgreSQL).
+- **🆕 Setup Otomatis & Environment Doctor**:
+  - `setup.ps1` membuat `.venv`, memasang dependensi, menyiapkan `.env` dan folder runtime, serta mencoba mengunduh bobot YOLO.
+  - `SECRET_KEY` dihasilkan otomatis jika konfigurasi masih memakai placeholder/default development.
+  - `start.ps1` memeriksa environment sebelum menjalankan server.
+  - `python -m app doctor` menampilkan status **OK**, **WARN**, atau **ERROR** untuk Python, konfigurasi, dependensi dasar, model, kredensial storage, dan koneksi database.
+- **🙂 Face Recognition Studio**:
+  - Registrasi, pengenalan, daftar, dan penghapusan wajah melalui `/face` dan `/api/v1/face`.
+- **🗂️ Model Hub**:
+  - Kelola model lokal melalui `/models` dan gunakan metadata fitur dinamis untuk inferensi ML.
+- **📄 RAG Vectorless**:
+  - Alur dokumen berbasis file lokal melalui `/rag/vectorless`, termasuk upload/inspeksi PDF dan tanya-jawab.
+- **📈 Market Forecast**:
+  - Dashboard `/grill-me` dengan integrasi MetaTrader 5 dan history forecast SQLite.
+  - Memerlukan paket MetaTrader5 serta terminal MT5 yang tersedia pada host untuk mengambil data pasar.
 
-## Prasyarat
+---
 
-Python 3.10+, Git, dan Docker Desktop bila ingin PostgreSQL + pgvector. MetaTrader 5 hanya diperlukan untuk market forecast.
+## 🏗️ Struktur Direktori
 
-## Menjalankan lokal
+```text
+BOILERPLATE/
+├── app/
+│   ├── api/v1/                 # REST API Endpoints (/api/v1/auth, /cv, /rag, /ml)
+│   ├── core/                   # Konfigurasi Pydantic, Database async, dan Keamanan
+│   ├── models/                 # Model database SQLAlchemy (User, Document, MLModel)
+│   ├── schemas/                # Skema validasi Pydantic
+│   ├── services/               # Core AI logic (OpenCV, YOLO, RAG, Scikit-Learn)
+│   ├── static/                 # Static assets (webcam.js, main.js, css)
+│   ├── templates/              # Jinja2 HTML templates + HTMX partials
+│   └── web/                    # Monolith web controllers (HTML & HTMX views)
+├── migrations/                 # Migrasi database Alembic
+├── weights/                    # Bobot model AI (yolov8n.onnx, scikit-learn .joblib)
+├── .env.example                # Template konfigurasi environment
+├── Dockerfile                  # Container build config
+├── docker-compose.yml          # Setup container + PostgreSQL pgvector lokal
+├── requirements.txt            # Dependensi Python teroptimasi
+├── vercel.json                 # Konfigurasi deployment Vercel Serverless
+├── main.py                     # Entry point aplikasi FastAPI
+├── setup.ps1                   # Setup Windows dengan .venv dan pemeriksaan environment
+├── start.ps1                   # Jalankan doctor sebelum server
+└── run.py                      # Script runner lokal
+```
 
-Untuk Windows, jalur termudah adalah:
+---
 
-    .\setup.ps1
-    .\start.ps1
+## 🚀 Panduan Memulai Cepat (Local Development)
 
-Script tersebut membuat .venv, memasang dependency, membuat .env, menghasilkan SECRET_KEY lokal, menyiapkan folder runtime, mengunduh bobot YOLO, dan menjalankan pemeriksaan konfigurasi. Jika PowerShell memblokir script lokal, jalankan `Set-ExecutionPolicy -Scope Process Bypass` pada terminal itu saja.
+### 🆕 Setup Windows via PowerShell:
 
-setup.bat tetap tersedia untuk kompatibilitas lama, tetapi tidak membuat virtual environment. Untuk kerja tim gunakan langkah manual:
+Dari folder root proyek, jalankan:
 
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    Copy-Item .env.example .env
-    python weights/download_weights.py
-    python run.py
+```powershell
+.\setup.ps1
+.\start.ps1
+```
 
-Linux/macOS menggunakan source .venv/bin/activate dan cp .env.example .env. Server juga dapat dijalankan dengan:
+**Prasyarat:** Python 3.10+ dengan launcher `py` tersedia. Setup menggunakan `.venv`, membuat `.env` jika belum ada, dan mengganti `SECRET_KEY` hanya jika masih berupa placeholder/default development. `start.ps1` menghentikan startup jika doctor menemukan error.
 
-    uvicorn main:app --reload --port 8000
+Jika kebijakan PowerShell memblokir script lokal, izin dapat diubah untuk terminal saat ini saja:
 
-Periksa konfigurasi kapan saja dengan:
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
 
-    .\.venv\Scripts\python.exe -m app doctor
+Untuk memeriksa ulang konfigurasi tanpa menyalakan server:
 
-Doctor memeriksa Python, dependency, `.env`, `SECRET_KEY`, database, model, dan kredensial storage.
+```powershell
+.\.venv\Scripts\python.exe -m app doctor
+```
 
-URL utama: /docs (Swagger), /cv, /face, /rag, /rag/vectorless, /ml, /models, /grill-me, dan /api/health.
+Doctor memeriksa konfigurasi storage, tetapi belum melakukan upload uji ke S3/R2 atau pengujian provider LLM/embedding. Warning seperti SQLite lokal atau bobot YOLO belum tersedia tidak memblokir startup; error seperti secret default atau kredensial S3 sebagian perlu diperbaiki.
 
-Tanpa DATABASE_URL, aplikasi memakai sqlite+aiosqlite:///./local.db. Tanpa kredensial S3, upload disimpan di app/static/uploads/.
+---
 
-## Konfigurasi
+### Cara Paling Mudah di Windows (1-Click Batch File):
 
-Salin .env.example ke .env dan ubah SECRET_KEY. Untuk PostgreSQL/Neon isi DATABASE_URL. Untuk pgvector jalankan:
+1. **Install Dependensi & Setup Otomatis**:
+   - Cukup dobel klik file **`setup.bat`**
+     *(Script ini menginstall seluruh dependensi `requirements.txt`, membuat file `.env` jika belum ada, dan mencoba mengunduh bobot model YOLOv8 ONNX. Untuk pembuatan virtual environment otomatis, gunakan `setup.ps1` di atas).*
 
-    CREATE EXTENSION IF NOT EXISTS vector;
+2. **Menjalankan Server**:
+   - Cukup dobel klik file **`run.bat`**
+     *(Server akan langsung aktif dan menampilkan link web di `http://localhost:8000`).*
 
-Untuk R2/S3 isi S3_ENDPOINT_URL, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME, dan opsional S3_PUBLIC_DOMAIN. OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL, dan GEMINI_API_KEY bersifat opsional sesuai provider.
+---
 
-## Database dan migrasi
+### Cara Manual via Terminal (PowerShell / Bash):
 
-Startup saat ini memanggil Base.metadata.create_all(). Alembic tetap tersedia:
+```bash
+# Buat virtual environment
+python -m venv venv
 
-    alembic current
-    alembic revision --autogenerate -m "describe change"
-    alembic upgrade head
+# Aktifkan di Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Atau di Linux/macOS:
+source venv/bin/activate
 
-Production sebaiknya menjalankan alembic upgrade head saat release dan memakai revision sebagai sumber perubahan schema.
+# Install dependensi
+pip install -r requirements.txt
+```
 
-## API singkat
+### 2. Konfigurasi Variabel Lingkungan (.env)
 
-Endpoint yang membutuhkan autentikasi menerima JWT atau X-API-Key:
+Salin file contoh ke `.env`:
+```bash
+cp .env.example .env
+```
 
-    curl http://localhost:8000/api/health
-    curl -X POST http://localhost:8000/api/v1/cv/detect -H "X-API-Key: YOUR_API_KEY" -F "file=@foto.jpg"
-    curl -X POST http://localhost:8000/api/v1/ml/predict/iris_classifier -H "Content-Type: application/json" -H "X-API-Key: YOUR_API_KEY" -d '{"features":{"sepal_length":5.8,"sepal_width":2.7,"petal_length":5.1,"petal_width":1.9}}'
+Buka `.env` dan sesuaikan pengaturan Anda:
+```env
+# Koneksi PostgreSQL (Neon DB)
+# Contoh: postgresql+asyncpg://user:pass@ep-xyz-pooler.us-east-2.aws.neon.tech/neondb?ssl=require
+DATABASE_URL=
 
-Gunakan /docs sebagai kontrak request/response yang paling akurat.
+# AI Provider Key untuk RAG (Dapatkan gratis di https://aistudio.google.com/)
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+> *Catatan: Jika `DATABASE_URL` dikosongkan, boilerplate akan otomatis menggunakan database SQLite lokal (`local.db`) untuk uji coba instan.*
 
-## Pengujian
+### 3. (Opsional) Download Model YOLOv8 ONNX
 
-    python -m unittest discover -s tests -p "test_*.py" -v
-    python -m compileall app main.py run.py
+Jalankan script helper untuk mengunduh bobot model YOLOv8 Nano (~12MB):
+```bash
+python weights/download_weights.py
+```
+*(Jika belum diunduh, sistem tetap dapat mendeteksi wajah dengan OpenCV Haar Cascade bawaan).*
 
-Sebelum release, uji health, login, upload, prediksi ML, dan query RAG di environment target. Health 200 saja belum membuktikan provider eksternal berfungsi.
+### 4. Jalankan Server Pengembangan
 
-## Deployment
+```bash
+python run.py
+```
+atau via uvicorn langsung:
+```bash
+uvicorn main:app --reload --port 8000
+```
 
-Docker Compose menjalankan FastAPI dan pgvector:
+Buka browser di:
+- **Web UI**: [http://localhost:8000](http://localhost:8000)
+- **Computer Vision Studio**: [http://localhost:8000/cv](http://localhost:8000/cv)
+- **pgvector RAG Studio**: [http://localhost:8000/rag](http://localhost:8000/rag)
+- **Machine Learning Studio**: [http://localhost:8000/ml](http://localhost:8000/ml)
+- **Face Recognition Studio**: [http://localhost:8000/face](http://localhost:8000/face)
+- **Model Hub**: [http://localhost:8000/models](http://localhost:8000/models)
+- **RAG Vectorless**: [http://localhost:8000/rag/vectorless](http://localhost:8000/rag/vectorless)
+- **Market Forecast**: [http://localhost:8000/grill-me](http://localhost:8000/grill-me)
+- **Dokumentasi REST API (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-    docker compose up --build -d
-    docker compose ps
-    curl http://localhost:8000/api/health
+---
 
-vercel.json menunjuk main.py ke runtime @vercel/python. Isi environment production di Vercel. Fitur dengan proses panjang, MetaTrader 5, filesystem persisten, atau model besar lebih cocok dijalankan di container/VPS.
+## 🗄️ Menghubungkan ke PostgreSQL (Neon DB)
 
-cloudflare_pages/functions adalah reverse proxy ke backend FastAPI. Atur BACKEND_URL pada Cloudflare Pages. Detail R2 dan proxy ada di cloudflare_pages/README_CLOUDFLARE.md.
+1. Buat project database baru di [Neon Console](https://console.neon.tech/).
+2. Aktifkan ekstensi `vector` jika belum aktif di SQL Editor Neon:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+3. Salin connection string dari dashboard Neon (pilih mode **Pooled**).
+4. Masukkan string tersebut ke variabel `DATABASE_URL` di `.env`. Boilerplate ini secara otomatis mengonversi format Neon (`postgresql://` atau `sslmode=require`) ke driver asinkron `postgresql+asyncpg://`.
+5. Jalankan migrasi jika diperlukan:
+   ```bash
+   alembic upgrade head
+   ```
 
-## Penilaian kematangan
+---
 
-Yang sudah baik untuk starter: pemisahan API/web/service/model/schema, fallback lokal, health check, Docker Compose, Alembic environment, tests, dan OpenAPI.
+## ☁️ Panduan Deployment
 
-Prioritas production-ready:
+### A. Deploy ke Vercel Serverless
+Proyek ini telah dilengkapi file `vercel.json` yang dikonfigurasi untuk runtime `@vercel/python`:
+1. Pastikan repository Anda telah di-push ke GitHub / GitLab.
+2. Import project ke [Vercel](https://vercel.com).
+3. Tambahkan Environment Variable di Vercel Settings:
+   - `DATABASE_URL`: Connection string Neon DB Anda.
+   - `SECRET_KEY`: String rahasia acak untuk JWT.
+   - `GEMINI_API_KEY`: API key AI Anda.
+4. Klik **Deploy**! Vercel akan otomatis mengeksekusi `main.py`.
 
-1. Satukan requirements.txt dan pyproject.toml, pin lockfile, lalu uji install bersih di CI.
-2. Buat initial Alembic revision dan pindahkan perubahan schema ad-hoc dari startup ke migration.
-3. Ganti secret default, jangan buat admin@aimonolith.local/admin123 di production, dan batasi CORS wildcard.
-4. Pisahkan CV, embedding, upload, dan forecast ke worker saat latency atau volume meningkat. Model AI dapat terduplikasi di memori per worker.
-5. Perlakukan joblib.load hanya untuk artifact tepercaya; simpan checksum dan versi model.
-6. Tambahkan request ID, structured logging, error tracking, metric latency, dan health provider terpisah.
-7. Batasi ukuran/tipe upload, tambah rate limit dan CSRF untuk form mutasi, validasi object key, dan jangan kirim exception mentah ke client.
-8. Production gunakan PostgreSQL, object storage persisten, backup, dan restore drill; SQLite/filesystem hanya fallback development.
+### B. Deploy dengan Docker & Docker Compose
+Untuk menjalankan seluruh stack (termasuk PostgreSQL dengan pgvector lokal) dalam kontainer:
+```bash
+docker compose up --build -d
+```
+Aplikasi akan tersedia di `http://localhost:8000` dan PostgreSQL di port `5432`.
 
-Urutan paling bernilai: dependency + CI, migrations, security defaults, observability, lalu worker/storage scaling.
+---
 
-## Lisensi
+## 📡 Integrasi REST API Eksternal
 
-MIT License.
+Endpoint REST API dapat dipanggil dari aplikasi luar dengan menyertakan header `X-API-Key`:
+
+### Deteksi Objek (cURL)
+```bash
+curl -X POST "http://localhost:8000/api/v1/cv/detect" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -F "file=@foto.jpg" \
+  -F "confidence=0.4"
+```
+
+### Tanya RAG (cURL)
+```bash
+curl -X POST "http://localhost:8000/api/v1/rag/query" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"question": "Bagaimana cara kerja sistem ini?", "top_k": 3}'
+```
+
+### Prediksi ML (cURL)
+```bash
+curl -X POST "http://localhost:8000/api/v1/ml/predict/iris_classifier" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"features": {"sepal_length": 5.8, "sepal_width": 2.7, "petal_length": 5.1, "petal_width": 1.9}}'
+```
+
+---
+
+## 📄 Lisensi
+MIT License - Bebas digunakan dan dimodifikasi untuk keperluan komersial maupun riset.
