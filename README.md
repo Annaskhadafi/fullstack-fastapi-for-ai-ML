@@ -195,8 +195,14 @@ DATABASE_URL=
 
 # AI Provider Key untuk RAG (Dapatkan gratis di https://aistudio.google.com/)
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Akun Pertama / Super Admin Awal
+FIRST_SUPERUSER_EMAIL=admin@aimonolith.local
+FIRST_SUPERUSER_PASSWORD=admin123
+FIRST_SUPERUSER_NAME=Administrator
 ```
-> *Catatan: Jika `DATABASE_URL` dikosongkan, boilerplate akan otomatis menggunakan database SQLite lokal (`local.db`) untuk uji coba instan.*
+> *Catatan: Jika `DATABASE_URL` dikosongkan, boilerplate akan otomatis menggunakan database SQLite lokal (`local.db`) untuk uji coba instan. Akun superuser awal akan otomatis dibuat saat server pertama kali dijalankan sesuai konfigurasi `.env`.*
+
 
 ### 3. (Opsional) Download Model YOLOv8 ONNX
 

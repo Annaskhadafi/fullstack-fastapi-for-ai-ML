@@ -13,6 +13,7 @@ from app.core.security import (
     get_current_token_from_request,
     api_key_header
 )
+from app.core.config import settings
 from app.models.user import User
 from app.models.api_key import ApiKey
 from app.schemas.auth import UserRegister
@@ -80,24 +81,60 @@ async def revoke_user_api_key(db: AsyncSession, user: User, key_id: str) -> bool
 
 
 async def seed_default_admin(db: AsyncSession) -> Optional[User]:
-    """Auto-creates the default administrator account if it does not exist."""
-    admin_query = select(User).where(User.email == "admin@aimonolith.local")
+    """Auto-creates the default administrator / first user account if it does not exist."""
+    admin_email = (settings.FIRST_SUPERUSER_EMAIL or "").strip().lower()
+    admin_password = (settings.FIRST_SUPERUSER_PASSWORD or "").strip()
+    admin_name = (settings.FIRST_SUPERUSER_NAME or "Administrator").strip()
+
+    if not admin_email or not admin_password:
+        logger.info("FIRST_SUPERUSER_EMAIL atau FIRST_SUPERUSER_PASSWORD belum diset. Melewati initial user seeding.")
+        return None
+
+    admin_query = select(User).where(User.email == admin_email)
     admin_user = (await db.execute(admin_query)).scalar_one_or_none()
     if not admin_user:
+        new_api_key = generate_api_key()
         default_admin = User(
-            email="admin@aimonolith.local",
-            hashed_password=hash_password("admin123"),
-            full_name="Administrator",
+            email=admin_email,
+            hashed_password=hash_password(admin_password),
+            full_name=admin_name,
             is_active=True,
             is_admin=True,
-            role="superadmin",
-            api_key=generate_api_key()
+            role="admin",
+            api_key=new_api_key
         )
         db.add(default_admin)
         await db.commit()
         await db.refresh(default_admin)
-        logger.info("Default administrator account created: admin@aimonolith.local / admin123")
+
+        # Register corresponding ApiKey entry in api_keys table
+        admin_key_record = ApiKey(
+            user_id=default_admin.id,
+            api_key=new_api_key,
+            name="Default Master Key"
+        )
+        db.add(admin_key_record)
+        await db.commit()
+
+        logger.info(f"Default initial administrator account created: {admin_email}")
         return default_admin
+    else:
+        # Pastikan user tersebut memiliki status aktif dan role admin
+        updated = False
+        if not admin_user.is_admin:
+            admin_user.is_admin = True
+            updated = True
+        if admin_user.role != "admin":
+            admin_user.role = "admin"
+            updated = True
+        if not admin_user.is_active:
+            admin_user.is_active = True
+            updated = True
+        if updated:
+            await db.commit()
+            await db.refresh(admin_user)
+            logger.info(f"Updated privileges for first superuser: {admin_email}")
+
     return admin_user
 
 

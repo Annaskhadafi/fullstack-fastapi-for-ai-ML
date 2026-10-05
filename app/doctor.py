@@ -52,6 +52,12 @@ def main() -> int:
         else:
             print("[OK] SECRET_KEY: sudah diubah")
 
+        if settings.FIRST_SUPERUSER_EMAIL and settings.FIRST_SUPERUSER_PASSWORD:
+            print(f"[OK] First User: {settings.FIRST_SUPERUSER_EMAIL} (dikonfigurasi via .env)")
+        else:
+            print("[WARN] First User: FIRST_SUPERUSER_EMAIL atau FIRST_SUPERUSER_PASSWORD belum diset di .env")
+            warnings.append("First User")
+
         if settings.DATABASE_URL:
             print("[OK] Database: PostgreSQL dikonfigurasi")
         else:

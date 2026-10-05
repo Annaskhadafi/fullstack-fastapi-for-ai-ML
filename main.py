@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db, AsyncSessionLocal
+from app.services.auth_service import seed_default_admin
 from app.services.ml_service import seed_demo_models
 from app.api.v1.router import api_v1_router
 from app.web.auth_views import router as web_auth_router
@@ -47,6 +48,13 @@ async def lifespan(app: FastAPI):
         logger.info(f"Connected to database ({'PostgreSQL/Neon' if settings.is_postgres else 'SQLite Local'})")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
+
+    # Seed Initial Admin / First User
+    try:
+        async with AsyncSessionLocal() as session:
+            await seed_default_admin(session)
+    except Exception as e:
+        logger.warning(f"Could not seed initial admin user on startup: {e}")
 
     # Seed Demo ML Models
     try:

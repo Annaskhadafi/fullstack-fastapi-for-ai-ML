@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,20 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     # Public origin used in generated API documentation/examples, e.g. https://api.example.com
     PUBLIC_BASE_URL: Optional[str] = None
+
+    # Initial / First User Credentials (Admin)
+    FIRST_SUPERUSER_EMAIL: str = Field(
+        default="admin@aimonolith.local",
+        validation_alias=AliasChoices("FIRST_SUPERUSER_EMAIL", "FIRST_USER_EMAIL", "ADMIN_EMAIL")
+    )
+    FIRST_SUPERUSER_PASSWORD: str = Field(
+        default="admin123",
+        validation_alias=AliasChoices("FIRST_SUPERUSER_PASSWORD", "FIRST_USER_PASSWORD", "ADMIN_PASSWORD")
+    )
+    FIRST_SUPERUSER_NAME: str = Field(
+        default="Administrator",
+        validation_alias=AliasChoices("FIRST_SUPERUSER_NAME", "FIRST_USER_NAME", "ADMIN_NAME")
+    )
 
     # AI Provider Keys & OpenAI SDK Compatibility
     GEMINI_API_KEY: Optional[str] = None
