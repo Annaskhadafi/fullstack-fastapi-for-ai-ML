@@ -1,0 +1,246 @@
+import os
+import shutil
+import tempfile
+import uuid
+import logging
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any
+
+from app.core.config import settings
+from app.services.model_hub_service import (
+    resolve_cv_model_path,
+    load_local_registry,
+    save_local_registry
+)
+from app.models.ml_model import MLModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+
+def get_safe_model_name(display_name: str) -> str:
+    cleaned = "".join(c for c in display_name.lower().replace(" ", "_") if c.isalnum() or c in "_-")
+    return cleaned.strip("_-") or "model"
+
+
+async def convert_cv_model(
+    source_identifier: str,
+    target_format: str,
+    display_name: Optional[str] = None,
+    description: Optional[str] = None,
+    db: Optional[AsyncSession] = None
+) -> Dict[str, Any]:
+    """
+    Converts a CV model (.pt or .onnx) to:
+    - tflite_float32: Standard TensorFlow Lite (FP32)
+    - tflite_float16: Quantized FP16 TensorFlow Lite (lighter file size)
+    - saved_model: TensorFlow SavedModel format directory
+
+    Registers the result into local models_registry.json and PostgreSQL if available.
+    """
+    source_path = await resolve_cv_model_path(source_identifier, db)
+    if not source_path or not os.path.exists(source_path):
+        raise FileNotFoundError(f"Model sumber '{source_identifier}' tidak ditemukan di sistem.")
+
+    os.makedirs(settings.WEIGHTS_DIR, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(prefix="convert_model_")
+    onnx_path = None
+    created_temp_onnx = False
+
+    try:
+        lower_source = source_path.lower()
+
+        # Step 1: Ensure we have an ONNX representation
+        if lower_source.endswith(".pt"):
+            logger.info(f"Converting PyTorch YOLO '{source_path}' to temporary ONNX...")
+            from ultralytics import YOLO
+            yolo_model = YOLO(source_path)
+            # Export to ONNX inside temp_dir
+            exported_onnx = yolo_model.export(format="onnx", imgsz=640, dynamic=False, verbose=False)
+            if isinstance(exported_onnx, str) and os.path.isfile(exported_onnx):
+                onnx_path = exported_onnx
+            else:
+                # Default export path by ultralytics is adjacent to .pt file
+                candidate = os.path.splitext(source_path)[0] + ".onnx"
+                if os.path.isfile(candidate):
+                    onnx_path = candidate
+                else:
+                    raise RuntimeError("Gagal mengekspor model PyTorch ke format perantara ONNX.")
+        elif lower_source.endswith(".onnx"):
+            onnx_path = source_path
+        else:
+            raise ValueError(f"Format model sumber '{os.path.basename(source_path)}' tidak didukung. Harus .pt atau .onnx.")
+
+        logger.info(f"Using ONNX model for TF/TFLite generation: {onnx_path}")
+
+        # Step 2: Convert ONNX to TensorFlow via onnx2tf
+        tf_work_dir = os.path.join(temp_dir, "tf_intermediate")
+        os.makedirs(tf_work_dir, exist_ok=True)
+
+        import numpy as np
+        import onnx2tf
+        import onnx2tf.onnx2tf as o2t
+        import onnx2tf.utils.common_functions as cf
+
+        # Patch dummy calibration data to prevent online download / pickle errors on NumPy 2.x
+        dummy_calib = lambda: np.zeros((20, 128, 128, 3), dtype=np.float32)
+        orig_o2t_func = getattr(o2t, "download_test_image_data", None)
+        orig_cf_func = getattr(cf, "download_test_image_data", None)
+        o2t.download_test_image_data = dummy_calib
+        cf.download_test_image_data = dummy_calib
+
+        try:
+            logger.info(f"Running onnx2tf conversion on {onnx_path}...")
+            onnx2tf.convert(
+                input_onnx_file_path=onnx_path,
+                output_folder_path=tf_work_dir,
+                copy_onnx_input_output_names_to_tflite=True,
+                non_verbose=True
+            )
+        finally:
+            if orig_o2t_func:
+                o2t.download_test_image_data = orig_o2t_func
+            if orig_cf_func:
+                cf.download_test_image_data = orig_cf_func
+
+        # Step 3: Package target output
+        suffix = uuid.uuid4().hex[:6]
+        default_label = os.path.splitext(os.path.basename(source_path))[0].replace("_", " ").title()
+
+        if target_format in ["tflite_float32", "tflite_float16"]:
+            framework = "tflite"
+            is_fp16 = target_format == "tflite_float16"
+            fmt_suffix = "fp16" if is_fp16 else "float32"
+            
+            final_display = display_name.strip() if display_name else f"{default_label} (TFLite {'FP16' if is_fp16 else 'FP32'})"
+            safe_name = f"{get_safe_model_name(final_display)}_{fmt_suffix}_{suffix}"
+            final_filename = f"{safe_name}.tflite"
+            dest_file = os.path.join(settings.WEIGHTS_DIR, final_filename)
+
+            # Locate TFLite generated by onnx2tf
+            target_pattern = "float16.tflite" if is_fp16 else "float32.tflite"
+            found_tflite = None
+            for f in os.listdir(tf_work_dir):
+                if f.endswith(target_pattern):
+                    found_tflite = os.path.join(tf_work_dir, f)
+                    break
+
+            if not found_tflite:
+                # Check for any .tflite in tf_work_dir
+                for f in os.listdir(tf_work_dir):
+                    if f.endswith(".tflite"):
+                        found_tflite = os.path.join(tf_work_dir, f)
+                        break
+
+            if found_tflite and os.path.isfile(found_tflite):
+                shutil.copy2(found_tflite, dest_file)
+            else:
+                # Fallback: convert directly from SavedModel using tf.lite.TFLiteConverter
+                import tensorflow as tf
+                logger.info(f"Fallback direct TFLite conversion from SavedModel {tf_work_dir}...")
+                converter = tf.lite.TFLiteConverter.from_saved_model(tf_work_dir)
+                if is_fp16:
+                    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+                    converter.target_spec.supported_types = [tf.float16]
+                tflite_content = converter.convert()
+                with open(dest_file, "wb") as f_out:
+                    f_out.write(tflite_content)
+
+            final_path = dest_file
+            desc = description.strip() if description else f"Model TFLite ({'FP16' if is_fp16 else 'FP32'}) dikonversi dari {os.path.basename(source_path)}"
+
+        elif target_format == "saved_model":
+            framework = "tensorflow"
+            final_display = display_name.strip() if display_name else f"{default_label} (TensorFlow SavedModel)"
+            safe_name = f"{get_safe_model_name(final_display)}_{suffix}_saved_model"
+            dest_dir = os.path.join(settings.WEIGHTS_DIR, safe_name)
+            os.makedirs(dest_dir, exist_ok=True)
+
+            # Copy saved_model.pb and variables directory
+            saved_pb = os.path.join(tf_work_dir, "saved_model.pb")
+            if os.path.isfile(saved_pb):
+                shutil.copy2(saved_pb, os.path.join(dest_dir, "saved_model.pb"))
+            
+            var_dir = os.path.join(tf_work_dir, "variables")
+            if os.path.isdir(var_dir):
+                shutil.copytree(var_dir, os.path.join(dest_dir, "variables"), dirs_exist_ok=True)
+
+            fp_pb = os.path.join(tf_work_dir, "fingerprint.pb")
+            if os.path.isfile(fp_pb):
+                shutil.copy2(fp_pb, os.path.join(dest_dir, "fingerprint.pb"))
+
+            final_path = dest_dir
+            desc = description.strip() if description else f"Model TensorFlow SavedModel dikonversi dari {os.path.basename(source_path)}"
+        else:
+            raise ValueError(f"Format target tidak dikenal: {target_format}")
+
+        # Step 4: Register in Model Hub (local JSON registry + Postgres DB)
+        model_id = str(uuid.uuid4())
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+        metadata = {
+            "id": model_id,
+            "name": safe_name,
+            "display_name": final_display,
+            "description": desc,
+            "category": "computer_vision",
+            "framework": framework,
+            "task_type": "object_detection",
+            "file_path": final_path,
+            "created_at": now_str,
+            "source": "converted_model",
+            "converted_from": os.path.basename(source_path),
+            "features": [],
+            "target_names": []
+        }
+
+        # Save to local registry
+        local_registry = load_local_registry()
+        local_registry.append(metadata)
+        save_local_registry(local_registry)
+
+        # Sync to DB if available
+        db_synced = False
+        if db is not None:
+            try:
+                db_record = MLModel(
+                    id=model_id,
+                    name=safe_name,
+                    display_name=final_display,
+                    description=desc,
+                    category="computer_vision",
+                    framework=framework,
+                    task_type="object_detection",
+                    file_path=final_path,
+                    features_json="[]",
+                    target_names_json="[]",
+                    metrics_json="{}"
+                )
+                db.add(db_record)
+                await db.commit()
+                db_synced = True
+            except Exception as e:
+                logger.warning(f"DB sync failed for converted model: {e}")
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"Successfully converted model to {final_path} (framework: {framework})")
+        return {
+            "success": True,
+            "model_id": model_id,
+            "name": safe_name,
+            "display_name": final_display,
+            "framework": framework,
+            "file_path": final_path,
+            "db_synced": db_synced
+        }
+
+    finally:
+        # Cleanup temporary files
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception as e:
+                logger.debug(f"Temp cleanup warning: {e}")

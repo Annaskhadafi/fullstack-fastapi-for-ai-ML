@@ -38,6 +38,7 @@ ENV/
 weights/*.pt
 weights/*.bin
 weights/*.safetensors
+weights/*.tflite
 !weights/.gitkeep
 
 # IDEs & OS

@@ -94,20 +94,44 @@ def scan_weights_directory() -> List[Dict[str, Any]]:
             continue
 
         file_path = os.path.join(settings.WEIGHTS_DIR, filename)
+        if os.path.isdir(file_path):
+            if os.path.isfile(os.path.join(file_path, "saved_model.pb")):
+                base_name = filename
+                cleaned_display = base_name.replace("_", " ").title()
+                scanned.append({
+                    "id": f"local_{base_name}",
+                    "name": base_name,
+                    "display_name": cleaned_display,
+                    "description": "Model TensorFlow SavedModel di weights/",
+                    "category": "computer_vision",
+                    "framework": "tensorflow",
+                    "task_type": "object_detection",
+                    "file_path": file_path,
+                    "is_builtin": False,
+                    "source": "local_storage",
+                    "created_at": datetime.fromtimestamp(os.path.getmtime(file_path), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+                })
+            continue
+
         if not os.path.isfile(file_path):
             continue
 
         ext = os.path.splitext(filename)[1].lower()
-        if ext not in [".pt", ".onnx", ".pkl", ".joblib"]:
+        if ext not in [".pt", ".onnx", ".tflite", ".pkl", ".joblib"]:
             continue
 
         # Inferred properties
         base_name = os.path.splitext(filename)[0]
         cleaned_display = base_name.replace("_", " ").title()
         
-        if ext in [".pt", ".onnx"]:
+        if ext in [".pt", ".onnx", ".tflite"]:
             category = "computer_vision"
-            framework = "pytorch_yolo" if ext == ".pt" else "onnx"
+            if ext == ".pt":
+                framework = "pytorch_yolo"
+            elif ext == ".onnx":
+                framework = "onnx"
+            else:
+                framework = "tflite"
             task_type = "object_detection"
         else:
             category = "machine_learning"
@@ -406,13 +430,14 @@ async def resolve_cv_model_path(
     if identifier == "haar_cascade":
         return "haar_cascade"
 
-    # 1. Direct file check in weights/
+    # 1. Direct file or directory check in weights/
     direct_path = os.path.join(settings.WEIGHTS_DIR, identifier)
-    if os.path.exists(direct_path) and os.path.isfile(direct_path):
-        return direct_path
+    if os.path.exists(direct_path):
+        if os.path.isfile(direct_path) or (os.path.isdir(direct_path) and os.path.isfile(os.path.join(direct_path, "saved_model.pb"))):
+            return direct_path
 
     # Try adding common extensions
-    for ext in [".pt", ".onnx"]:
+    for ext in [".pt", ".onnx", ".tflite"]:
         ext_path = os.path.join(settings.WEIGHTS_DIR, f"{identifier}{ext}")
         if os.path.exists(ext_path) and os.path.isfile(ext_path):
             return ext_path
@@ -438,6 +463,66 @@ async def resolve_cv_model_path(
         if fname.lower().startswith(identifier.lower()):
             fp = os.path.join(settings.WEIGHTS_DIR, fname)
             if os.path.isfile(fp):
+                return fp
+
+    return None
+
+
+async def resolve_model_file_path(
+    identifier: Optional[str],
+    db: Optional[AsyncSession] = None
+) -> Optional[str]:
+    """
+    Resolves the exact file path or directory for any model (CV or ML) by identifier (ID, name, or filename).
+    """
+    if not identifier:
+        return None
+
+    if identifier in ["default", "yolov8n", "yolov8n.pt"]:
+        pt_path = os.path.join(settings.WEIGHTS_DIR, "yolov8n.pt")
+        if os.path.exists(pt_path):
+            return pt_path
+        onnx_path = os.path.join(settings.WEIGHTS_DIR, settings.CV_MODEL_NAME)
+        if os.path.exists(onnx_path):
+            return onnx_path
+
+    if identifier in ["iris", "iris_classifier", "iris_classifier.joblib"]:
+        iris_path = os.path.join(settings.WEIGHTS_DIR, "iris_classifier.joblib")
+        if os.path.exists(iris_path):
+            return iris_path
+
+    # 1. Direct file or directory check in weights/
+    direct_path = os.path.join(settings.WEIGHTS_DIR, identifier)
+    if os.path.exists(direct_path):
+        return direct_path
+
+    # Try adding common extensions
+    for ext in [".pt", ".onnx", ".tflite", ".joblib", ".pkl", ".zip"]:
+        ext_path = os.path.join(settings.WEIGHTS_DIR, f"{identifier}{ext}")
+        if os.path.exists(ext_path):
+            return ext_path
+
+    # 2. Check DB
+    if db is not None:
+        try:
+            m = await db.scalar(select(MLModel).where((MLModel.id == identifier) | (MLModel.name == identifier)))
+            if m and m.file_path and os.path.exists(m.file_path):
+                return m.file_path
+        except Exception as e:
+            logger.warning(f"DB lookup failed for model {identifier}: {e}")
+
+    # 3. Check local registry
+    for item in load_local_registry():
+        if item.get("id") == identifier or item.get("name") == identifier:
+            fp = item.get("file_path")
+            if fp and os.path.exists(fp):
+                return fp
+
+    # 4. Fuzzy filename search in weights/
+    for fname in os.listdir(settings.WEIGHTS_DIR):
+        if fname.lower().startswith(identifier.lower()):
+            fp = os.path.join(settings.WEIGHTS_DIR, fname)
+            if os.path.exists(fp):
                 return fp
 
     return None

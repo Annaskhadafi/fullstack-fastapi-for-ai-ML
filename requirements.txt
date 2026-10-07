@@ -21,6 +21,9 @@ onnxruntime>=1.19.0
 torch>=2.0.0
 torchvision>=0.15.0
 ultralytics>=8.3.0
+tensorflow>=2.19.0
+tf-keras>=2.19.0
+onnx2tf>=2.3.15
 filelock>=3.14.0
 fsspec>=2024.1.0
 

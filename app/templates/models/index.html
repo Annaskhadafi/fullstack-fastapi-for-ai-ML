@@ -104,6 +104,15 @@
                             <td class="py-3 px-4 font-mono text-xs text-slate-500">weights/yolov8n.pt</td>
                             <td class="py-3 px-4 text-xs text-slate-500">Model object detection 80 kelas COCO dataset</td>
                             <td class="py-3 px-4 text-right">
+                                <a href="/models/download/yolov8n.pt" class="btn btn-outline btn-xs border-slate-300 text-slate-700 hover:bg-slate-50 mr-1" title="Download weights/yolov8n.pt">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                                </a>
+                                <button type="button" class="btn btn-outline btn-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 mr-1"
+                                        data-model-id="yolov8n"
+                                        data-model-name="YOLOv8 Nano"
+                                        onclick="openConvertModal(this)">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Convert
+                                </button>
                                 <span class="badge badge-sm badge-ghost">Default</span>
                             </td>
                         </tr>
@@ -120,7 +129,7 @@
                                 <span class="badge badge-sm badge-success whitespace-nowrap inline-flex">OpenCV XML</span>
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500">cv2.haarcascades</td>
-                            <td class="py-3 px-4 text-xs text-slate-500">Deteksi wajah instan tanpa file eksternal</td>
+                            <td class="py-3 px-4 text-slate-500 text-xs">Deteksi wajah instan tanpa file eksternal</td>
                             <td class="py-3 px-4 text-right">
                                 <span class="badge badge-sm badge-ghost">Default</span>
                             </td>
@@ -130,17 +139,42 @@
                         <tr class="hover:bg-slate-50/50">
                             <td class="py-3 px-4">
                                 <div class="font-medium text-slate-900 flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                    <span class="w-2 h-2 rounded-full {% if m.framework == 'tflite' %}bg-amber-500{% elif m.framework == 'tensorflow' %}bg-orange-500{% else %}bg-indigo-500{% endif %}"></span>
                                     <span>{{ m.display_name }}</span>
                                 </div>
                                 <span class="text-xs text-slate-400 font-mono">{{ m.name }}</span>
                             </td>
                             <td class="py-3 px-4 min-w-[155px]">
+                                {% if m.framework == 'tflite' %}
+                                <span class="badge badge-sm badge-warning font-semibold whitespace-nowrap inline-flex gap-1">
+                                    <i data-lucide="cpu" class="w-3 h-3"></i> TFLite
+                                </span>
+                                {% elif m.framework == 'tensorflow' %}
+                                <span class="badge badge-sm badge-primary font-semibold whitespace-nowrap inline-flex gap-1">
+                                    <i data-lucide="layers" class="w-3 h-3"></i> TensorFlow
+                                </span>
+                                {% elif m.framework == 'onnx' %}
+                                <span class="badge badge-sm badge-accent whitespace-nowrap inline-flex">ONNX</span>
+                                {% elif m.framework == 'pytorch_yolo' %}
+                                <span class="badge badge-sm badge-info whitespace-nowrap inline-flex">PyTorch YOLO</span>
+                                {% else %}
                                 <span class="badge badge-sm badge-secondary whitespace-nowrap inline-flex max-w-full truncate" title="{{ m.framework }}">{{ m.framework }}</span>
+                                {% endif %}
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-xs">{{ m.file_path }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500">{{ m.description or '-' }}</td>
                             <td class="py-3 px-4 text-right">
+                                <a href="/models/{{ m.id }}/download" class="btn btn-outline btn-xs border-slate-300 text-slate-700 hover:bg-slate-50 mr-1" title="Download model file">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                                </a>
+                                {% if m.framework in ['pytorch_yolo', 'onnx', 'pytorch'] or m.file_path.endswith('.pt') or m.file_path.endswith('.onnx') %}
+                                <button type="button" class="btn btn-outline btn-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 mr-1"
+                                        data-model-id="{{ m.id or m.name }}"
+                                        data-model-name="{{ m.display_name }}"
+                                        onclick="openConvertModal(this)">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Convert
+                                </button>
+                                {% endif %}
                                 <button type="button" class="btn btn-outline btn-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50 mr-1"
                                         data-api-url="/api/v1/cv/detect"
                                         data-api-model="{{ m.name }}"
@@ -195,6 +229,9 @@
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-xs">{{ m.file_path }}</td>
                             <td class="py-3 px-4 text-right">
+                                <a href="/models/{{ m.id }}/download" class="btn btn-outline btn-xs border-slate-300 text-slate-700 hover:bg-slate-50 mr-1" title="Download model file">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                                </a>
                                 <button type="button" class="btn btn-outline btn-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50 mr-1"
                                         data-api-url="/api/v1/ml/predict/{{ m.name }}"
                                         data-api-model="{{ m.name }}"
@@ -348,9 +385,116 @@
             </div>
         </div>
     </dialog>
+
+    <!-- Convert Model Modal -->
+    <dialog id="convert-modal" class="modal">
+        <div class="modal-box bg-white max-w-lg rounded-2xl border border-slate-200 shadow-xl p-6">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-slate-400 hover:text-slate-700">✕</button>
+            </form>
+            <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-indigo-600"></i>
+                Konversi Model CV
+            </h3>
+            <p class="text-xs text-slate-500 mt-1">
+                Konversi model YOLO (.pt) atau ONNX (.onnx) ke format edge <strong>TensorFlow Lite</strong> atau <strong>TensorFlow SavedModel</strong>.
+            </p>
+
+            <form id="convert-form" hx-post="/models/convert" hx-target="#convert-alert" class="space-y-4 mt-4" onsubmit="handleConvertSubmit()">
+                <input type="hidden" name="source_identifier" id="convert-source-id" value="" />
+                
+                <div id="convert-alert"></div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Model Sumber:</span>
+                    </label>
+                    <input type="text" id="convert-source-label" readonly class="input input-bordered input-sm w-full bg-slate-100 font-semibold text-slate-700 text-xs" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Format Target Konversi:</span>
+                    </label>
+                    <select name="target_format" id="convert-target-format" class="select select-bordered select-sm w-full bg-slate-50 text-slate-800" onchange="updateConvertDisplayName()">
+                        <option value="tflite_float32">TensorFlow Lite - Float32 (Standar Edge/Mobile)</option>
+                        <option value="tflite_float16">TensorFlow Lite - Float16 (Kuantisasi FP16, Hemat Ukuran ~50%)</option>
+                        <option value="saved_model">TensorFlow SavedModel (Format Folder Standar TF)</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Nama Tampilan Model Hasil:</span>
+                    </label>
+                    <input type="text" name="display_name" id="convert-display-name" class="input input-bordered input-sm w-full" placeholder="Nama model hasil konversi" required />
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium text-xs text-slate-700">Deskripsi (Opsional):</span>
+                    </label>
+                    <input type="text" name="description" id="convert-description" class="input input-bordered input-sm w-full" placeholder="Keterangan singkat model hasil konversi" />
+                </div>
+
+                <div class="pt-3 flex items-center justify-end gap-2">
+                    <div id="convert-spinner" class="hidden items-center gap-2 text-xs text-indigo-600 font-medium mr-auto">
+                        <span class="loading loading-spinner loading-xs"></span>
+                        <span id="convert-status-text">Mengonversi model (10-30 detik)...</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('convert-modal').close()" class="btn btn-ghost btn-sm" id="convert-cancel-btn">Batal</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-5 gap-1.5" id="convert-submit-btn">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Mulai Konversi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
 </div>
 
 <script>
+let currentSourceModelName = '';
+
+function openConvertModal(button) {
+    const modelId = button.dataset.modelId;
+    const modelName = button.dataset.modelName;
+    currentSourceModelName = modelName;
+    
+    document.getElementById('convert-source-id').value = modelId;
+    document.getElementById('convert-source-label').value = modelName;
+    document.getElementById('convert-alert').innerHTML = '';
+    
+    updateConvertDisplayName();
+    
+    const submitBtn = document.getElementById('convert-submit-btn');
+    submitBtn.disabled = false;
+    document.getElementById('convert-cancel-btn').disabled = false;
+    const spinner = document.getElementById('convert-spinner');
+    spinner.classList.add('hidden');
+    spinner.classList.remove('flex');
+    
+    document.getElementById('convert-modal').showModal();
+    if (window.lucide) { lucide.createIcons(); }
+}
+
+function updateConvertDisplayName() {
+    const fmt = document.getElementById('convert-target-format').value;
+    let suffix = 'TFLite FP32';
+    if (fmt === 'tflite_float16') suffix = 'TFLite FP16';
+    else if (fmt === 'saved_model') suffix = 'TensorFlow SavedModel';
+    
+    document.getElementById('convert-display-name').value = `${currentSourceModelName} (${suffix})`;
+}
+
+function handleConvertSubmit() {
+    const submitBtn = document.getElementById('convert-submit-btn');
+    submitBtn.disabled = true;
+    document.getElementById('convert-cancel-btn').disabled = true;
+    const spinner = document.getElementById('convert-spinner');
+    spinner.classList.remove('hidden');
+    spinner.classList.add('flex');
+}
+
 function openModelApiDialog(button) {
     const url = button.dataset.apiUrl;
     const kind = button.dataset.apiKind;
@@ -364,6 +508,7 @@ function openModelApiDialog(button) {
         : `curl -X POST "${absoluteUrl}" \\\n  -H "X-API-Key: ${key || 'YOUR_API_KEY'}" \\\n  -F "file=@image.jpg" \\\n  -F "confidence=0.35"`;
     document.getElementById('model-api-key-status').textContent = key ? 'API key aktif untuk akun Anda.' : 'Generate API key di Dashboard sebelum memanggil endpoint.';
     document.getElementById('model-api-modal').showModal();
+    if (window.lucide) { lucide.createIcons(); }
 }
 
 function copyModelApiValue(id, button) {

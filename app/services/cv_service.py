@@ -30,6 +30,8 @@ CLASS_COLORS = np.random.randint(50, 255, size=(len(COCO_CLASSES), 3), dtype=np.
 
 _onnx_sessions: Dict[str, Any] = {}
 _yolo_models: Dict[str, Any] = {}
+_tflite_interpreters: Dict[str, Any] = {}
+_tf_saved_models: Dict[str, Any] = {}
 
 
 def inspect_cv_model(model_path: Optional[str]) -> Dict[str, Any]:
@@ -37,9 +39,16 @@ def inspect_cv_model(model_path: Optional[str]) -> Dict[str, Any]:
     if model_path == "haar_cascade":
         return {"format": "OpenCV Haar Cascade", "task": "face_detection", "input": "grayscale image", "labels": ["face"]}
     path = model_path or os.path.join(settings.WEIGHTS_DIR, settings.CV_MODEL_NAME)
-    if not os.path.isfile(path):
+    if not os.path.exists(path):
         return {"format": "unavailable", "task": "object_detection", "labels": []}
-    info: Dict[str, Any] = {"file": os.path.basename(path), "format": os.path.splitext(path)[1].lstrip(".").upper(), "size_mb": round(os.path.getsize(path) / 1048576, 2)}
+    
+    size_mb = round(os.path.getsize(path) / 1048576, 2) if os.path.isfile(path) else 0.0
+    info: Dict[str, Any] = {
+        "file": os.path.basename(path),
+        "format": os.path.splitext(path)[1].lstrip(".").upper() if os.path.isfile(path) else "SAVED_MODEL",
+        "size_mb": size_mb
+    }
+    
     if path.lower().endswith(".pt"):
         model = get_yolo_pt_model(path)
         info["task"] = getattr(model, "task", "object_detection") if model else "object_detection"
@@ -51,6 +60,18 @@ def inspect_cv_model(model_path: Optional[str]) -> Dict[str, Any]:
         input_meta = session.get_inputs()[0] if session else None
         info["task"] = "object_detection"
         info["input"] = list(input_meta.shape) if input_meta else "unavailable"
+        info["labels"] = COCO_CLASSES
+    elif path.lower().endswith(".tflite"):
+        interpreter = get_tflite_interpreter(path)
+        input_meta = interpreter.get_input_details()[0] if interpreter else None
+        info["format"] = "TensorFlow Lite"
+        info["task"] = "object_detection"
+        info["input"] = list(input_meta["shape"]) if input_meta else "unavailable"
+        info["labels"] = COCO_CLASSES
+    elif os.path.isdir(path) and os.path.isfile(os.path.join(path, "saved_model.pb")):
+        info["format"] = "TensorFlow SavedModel"
+        info["task"] = "object_detection"
+        info["input"] = "[1, 640, 640, 3] (Auto)"
         info["labels"] = COCO_CLASSES
     else:
         info["task"] = "object_detection"
@@ -91,6 +112,39 @@ def get_yolo_pt_model(model_path: str):
     except Exception as e:
         logger.warning(f"Failed to load YOLO PyTorch model {model_path}: {e}")
         return None
+
+
+def get_tflite_interpreter(model_path: str):
+    """Lazily loads and caches the TensorFlow Lite interpreter."""
+    if model_path in _tflite_interpreters:
+        return _tflite_interpreters[model_path]
+    if os.path.exists(model_path) and os.path.isfile(model_path):
+        try:
+            import tensorflow as tf
+            interpreter = tf.lite.Interpreter(model_path=model_path)
+            interpreter.allocate_tensors()
+            _tflite_interpreters[model_path] = interpreter
+            logger.info(f"Loaded TFLite model from: {model_path}")
+            return interpreter
+        except Exception as e:
+            logger.warning(f"Failed to load TFLite model {model_path}: {e}")
+    return None
+
+
+def get_tf_saved_model(model_path: str):
+    """Lazily loads and caches a TensorFlow SavedModel."""
+    if model_path in _tf_saved_models:
+        return _tf_saved_models[model_path]
+    if os.path.exists(model_path):
+        try:
+            import tensorflow as tf
+            model = tf.saved_model.load(model_path)
+            _tf_saved_models[model_path] = model
+            logger.info(f"Loaded TensorFlow SavedModel from: {model_path}")
+            return model
+        except Exception as e:
+            logger.warning(f"Failed to load TF SavedModel {model_path}: {e}")
+    return None
 
 
 def decode_image(image_bytes: bytes) -> np.ndarray:
@@ -324,7 +378,183 @@ def run_yolo_detection(
             original_dimensions={"width": orig_w, "height": orig_h}
         )
 
-    # 3. Built-in OpenCV Haar Cascade Fallback (Guaranteed to work 100% without any model downloads)
+    # 3. Try TensorFlow Lite (.tflite)
+    if model_path and model_path.endswith(".tflite") and os.path.exists(model_path):
+        interpreter = get_tflite_interpreter(model_path)
+        if interpreter is not None:
+            try:
+                input_details = interpreter.get_input_details()[0]
+                output_details = interpreter.get_output_details()[0]
+                
+                in_shape = input_details["shape"]
+                if len(in_shape) == 4 and in_shape[1] == 3:
+                    # NCHW
+                    input_h, input_w = in_shape[2], in_shape[3]
+                    input_img = cv2.resize(img, (input_w, input_h))
+                    input_data = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+                    input_data = np.transpose(input_data, (2, 0, 1))
+                    input_data = np.expand_dims(input_data, axis=0)
+                else:
+                    # NHWC (Standard for TFLite)
+                    input_h = in_shape[1] if len(in_shape) == 4 and in_shape[1] > 0 else 640
+                    input_w = in_shape[2] if len(in_shape) == 4 and in_shape[2] > 0 else 640
+                    input_img = cv2.resize(img, (input_w, input_h))
+                    input_data = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+                    input_data = np.expand_dims(input_data, axis=0)
+
+                if input_details["dtype"] == np.uint8:
+                    input_data = (input_data * 255).astype(np.uint8)
+
+                interpreter.set_tensor(input_details["index"], input_data)
+                interpreter.invoke()
+                output_data = interpreter.get_tensor(output_details["index"])
+
+                predictions = np.squeeze(output_data)
+                if predictions.ndim == 2:
+                    if predictions.shape[0] < predictions.shape[1]:
+                        predictions = predictions.T
+
+                    scores = np.max(predictions[:, 4:], axis=1)
+                    valid_mask = scores > conf_threshold
+                    predictions = predictions[valid_mask, :]
+                    scores = scores[valid_mask]
+
+                    if len(scores) > 0:
+                        class_ids = np.argmax(predictions[:, 4:], axis=1)
+                        boxes = predictions[:, :4]
+
+                        scale_x = orig_w / input_w
+                        scale_y = orig_h / input_h
+
+                        x1 = ((boxes[:, 0] - boxes[:, 2] / 2) * scale_x).astype(int)
+                        y1 = ((boxes[:, 1] - boxes[:, 3] / 2) * scale_y).astype(int)
+                        w = (boxes[:, 2] * scale_x).astype(int)
+                        h = (boxes[:, 3] * scale_y).astype(int)
+
+                        cv_boxes = [[int(x1[i]), int(y1[i]), int(w[i]), int(h[i])] for i in range(len(x1))]
+                        indices = cv2.dnn.NMSBoxes(cv_boxes, scores.tolist(), conf_threshold, 0.45)
+
+                        for i in indices:
+                            idx = int(i)
+                            cid = int(class_ids[idx])
+                            conf = float(scores[idx])
+                            label = COCO_CLASSES[cid] if cid < len(COCO_CLASSES) else f"class_{cid}"
+
+                            bx, by, bw, bh = cv_boxes[idx]
+                            bx2 = min(orig_w, bx + bw)
+                            by2 = min(orig_h, by + bh)
+                            bx = max(0, bx)
+                            by = max(0, by)
+
+                            boxes_out.append(BoundingBox(
+                                label=label,
+                                confidence=round(conf, 3),
+                                x1=bx,
+                                y1=by,
+                                x2=bx2,
+                                y2=by2
+                            ))
+                            classes_summary[label] = classes_summary.get(label, 0) + 1
+
+                            color = CLASS_COLORS[cid % len(CLASS_COLORS)]
+                            cv2.rectangle(annotated, (bx, by), (bx2, by2), color, 2)
+                            text = f"{label} {int(conf * 100)}%"
+                            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                            cv2.rectangle(annotated, (bx, by - 20), (bx + tw + 6, by), color, -1)
+                            cv2.putText(annotated, text, (bx + 3, by - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    return DetectionResult(
+                        success=True,
+                        total_detected=len(boxes_out),
+                        classes_summary=classes_summary,
+                        boxes=boxes_out,
+                        execution_time_ms=round(elapsed_ms, 2),
+                        annotated_image_base64=encode_image_to_base64(annotated),
+                        original_dimensions={"width": orig_w, "height": orig_h}
+                    )
+            except Exception as e:
+                logger.warning(f"TFLite inference failed on {model_path}: {e}")
+
+    # 4. Try TensorFlow SavedModel (directory with saved_model.pb)
+    if model_path and os.path.isdir(model_path) and os.path.isfile(os.path.join(model_path, "saved_model.pb")):
+        tf_model = get_tf_saved_model(model_path)
+        if tf_model is not None:
+            try:
+                import tensorflow as tf
+                infer = tf_model.signatures.get("serving_default") or list(tf_model.signatures.values())[0]
+                input_size = 640
+                input_img = cv2.resize(img, (input_size, input_size))
+                input_data = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+                input_tensor = tf.constant(np.expand_dims(input_data, axis=0))
+                
+                outputs = infer(input_tensor)
+                first_out_key = list(outputs.keys())[0]
+                output_np = outputs[first_out_key].numpy()
+                predictions = np.squeeze(output_np)
+                if predictions.ndim == 2:
+                    if predictions.shape[0] < predictions.shape[1]:
+                        predictions = predictions.T
+                    scores = np.max(predictions[:, 4:], axis=1)
+                    valid_mask = scores > conf_threshold
+                    predictions = predictions[valid_mask, :]
+                    scores = scores[valid_mask]
+
+                    if len(scores) > 0:
+                        class_ids = np.argmax(predictions[:, 4:], axis=1)
+                        boxes = predictions[:, :4]
+                        scale_x = orig_w / input_size
+                        scale_y = orig_h / input_size
+                        x1 = ((boxes[:, 0] - boxes[:, 2] / 2) * scale_x).astype(int)
+                        y1 = ((boxes[:, 1] - boxes[:, 3] / 2) * scale_y).astype(int)
+                        w = (boxes[:, 2] * scale_x).astype(int)
+                        h = (boxes[:, 3] * scale_y).astype(int)
+
+                        cv_boxes = [[int(x1[i]), int(y1[i]), int(w[i]), int(h[i])] for i in range(len(x1))]
+                        indices = cv2.dnn.NMSBoxes(cv_boxes, scores.tolist(), conf_threshold, 0.45)
+
+                        for i in indices:
+                            idx = int(i)
+                            cid = int(class_ids[idx])
+                            conf = float(scores[idx])
+                            label = COCO_CLASSES[cid] if cid < len(COCO_CLASSES) else f"class_{cid}"
+
+                            bx, by, bw, bh = cv_boxes[idx]
+                            bx2 = min(orig_w, bx + bw)
+                            by2 = min(orig_h, by + bh)
+                            bx = max(0, bx)
+                            by = max(0, by)
+
+                            boxes_out.append(BoundingBox(
+                                label=label,
+                                confidence=round(conf, 3),
+                                x1=bx,
+                                y1=by,
+                                x2=bx2,
+                                y2=by2
+                            ))
+                            classes_summary[label] = classes_summary.get(label, 0) + 1
+                            color = CLASS_COLORS[cid % len(CLASS_COLORS)]
+                            cv2.rectangle(annotated, (bx, by), (bx2, by2), color, 2)
+                            text = f"{label} {int(conf * 100)}%"
+                            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                            cv2.rectangle(annotated, (bx, by - 20), (bx + tw + 6, by), color, -1)
+                            cv2.putText(annotated, text, (bx + 3, by - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    return DetectionResult(
+                        success=True,
+                        total_detected=len(boxes_out),
+                        classes_summary=classes_summary,
+                        boxes=boxes_out,
+                        execution_time_ms=round(elapsed_ms, 2),
+                        annotated_image_base64=encode_image_to_base64(annotated),
+                        original_dimensions={"width": orig_w, "height": orig_h}
+                    )
+            except Exception as e:
+                logger.warning(f"TF SavedModel inference failed on {model_path}: {e}")
+
+    # 5. Built-in OpenCV Haar Cascade Fallback (Guaranteed to work 100% without any model downloads)
     if not hasattr(cv2, "CascadeClassifier"):
         elapsed_ms = (time.time() - start_time) * 1000
         return DetectionResult(success=True, total_detected=0, classes_summary={}, boxes=[], execution_time_ms=round(elapsed_ms, 2), annotated_image_base64=encode_image_to_base64(annotated), original_dimensions={"width": orig_w, "height": orig_h})
